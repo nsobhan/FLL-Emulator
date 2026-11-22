@@ -13,6 +13,14 @@ shows a simulated robot driving on a mat in the browser.
 
 This is an independent project and is not made, endorsed or supported by the LEGO Group.
 
+## Try it in the browser
+
+**https://nsobhan.github.io/FFL-Emulator/** opens the browser version. Drop in a `.llsp3`
+Word Blocks project and watch the robot run it, block by block. Everything runs on your own
+computer, and project files aren't uploaded anywhere. It's the `web/` folder: the same robot
+simulator and Word Blocks interpreter, ported to JavaScript. Connecting the real SPIKE app over
+Bluetooth, and running Python projects, need the Mac version below.
+
 ## Setup (macOS)
 
 ```bash
@@ -66,6 +74,7 @@ device) or open a `.py` file, then click **Run project**. There are also sample 
 | Word Block engine for compiled block programs (`scratch`) | `spikehub/mp/scratch.py` |
 | `.llsp3` reader and Word Blocks interpreter | `spikehub/blocks.py` |
 | Robot view | `spikehub/static/index.html`, `spikehub/web.py` |
+| Browser version (GitHub Pages) | `web/` |
 
 The app compiles Word Blocks and Python to MicroPython bytecode. The emulator runs that bytecode
 in real MicroPython, with stand-in hub modules that forward each call to the simulator.

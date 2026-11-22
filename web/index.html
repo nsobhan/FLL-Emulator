@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFL Emulator</title>
+<meta name="description" content="Open a SPIKE Prime Word Blocks project (.llsp3) and watch a simulated robot run it, block by block.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: workbench. Project bar on top; mat and program on the left; hub, feed and ports on the right. */
+:root {
+  --bg: #eceee9; --panel: #ffffff; --panel-2: #f5f6f2; --ink: #1c2024; --muted: #5f6870;
+  --line: #d6d9d2; --accent: #ffc917; --accent-ink: #2a2100; --ok: #1f9d6b; --warn: #c98a00; --bad: #c8412f;
+  --hub-face: #23272b; --led-off: #30353a; --led-on: #fff6d8; --mat: #fbfbf8; --grid: #e7e9e2; --wall: #6b6f73;
+  --c-events: #e0a400; --c-move: #e84ba8; --c-motor: #1e88e5; --c-light: #8a63d2; --c-sound: #b84bd6;
+  --c-sensors: #1899b8; --c-control: #ec8414; --c-operators: #43a047; --c-variables: #ef6c00;
+  --c-myblocks: #e0475b; --c-other: #7d868d;
+  --f-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181b; --panel: #1e2226; --panel-2: #252a2f; --ink: #e9ece8; --muted: #9aa3aa; --line: #343a40;
+    --ok: #3cc48c; --warn: #e2a821; --bad: #ef6a56; --hub-face: #0f1113; --led-off: #2a2f34; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181b; --panel: #1e2226; --panel-2: #252a2f; --ink: #e9ece8; --muted: #9aa3aa; --line: #343a40;
+  --ok: #3cc48c; --warn: #e2a821; --bad: #ef6a56; --hub-face: #0f1113; --led-off: #2a2f34; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); }
+button, select { font: inherit; color: inherit; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+a { color: inherit; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; background: var(--panel);
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); }
+header h1 { font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.logo { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 4px; }
+.logo i { background: var(--accent-ink); border-radius: 1px; opacity: .85; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); font-weight: 500; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.pill[data-run="1"] .dot { background: var(--ok); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--panel); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+.btn:hover { background: var(--panel-2); }
+.btn:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.stop { background: var(--bad); color: #fff; border-color: transparent; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+@media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hint { color: var(--muted); font-size: 13px; }
+select { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 8px; }
+
+/* project bar */
+.projbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+  border: 2px dashed var(--line); background: var(--panel); }
+.projbar.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.projbar .what { min-width: 0; flex: 1 1 280px; }
+.projbar .name { font: 700 18px var(--f-display); overflow-wrap: anywhere; }
+.err { color: var(--bad); }
+
+/* mat */
+#mat { width: 100%; display: block; border-radius: 8px; touch-action: none; cursor: grab; }
+.readout { margin-top: 8px; font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* blocks */
+.blocks { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; max-height: 560px; overflow: auto; padding: 4px; }
+.script { display: flex; flex-direction: column; min-width: 0; }
+.blk { --c: var(--c-other); background: var(--c); color: #fff; font-weight: 600; font-size: 13px; line-height: 1.3;
+  padding: 7px 12px; border-radius: 6px; margin-top: 2px; width: fit-content; max-width: 100%;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); transition: box-shadow .1s, transform .1s; overflow-wrap: anywhere; }
+.blk.hat { border-radius: 16px 16px 6px 6px; padding-top: 10px; }
+.cwrap { --c: var(--c-control); border-left: 14px solid var(--c); border-radius: 6px; margin-top: 2px; padding-bottom: 8px;
+  display: flex; flex-direction: column; }
+.cwrap > .blk { margin: 0 0 0 -14px; border-radius: 6px 6px 6px 0; }
+.cwrap .inner { padding: 2px 0 2px 6px; display: flex; flex-direction: column; min-height: 22px; }
+.cwrap .elselbl { background: var(--c); color: #fff; font-weight: 600; font-size: 13px; padding: 4px 12px;
+  margin-left: -14px; width: 80px; border-radius: 0 6px 6px 0; }
+.blk.running { box-shadow: 0 0 0 3px var(--panel), 0 0 0 6px var(--c), 0 0 18px var(--c); transform: translateX(3px); }
+.pysrc { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto;
+  font: 12px/1.5 var(--f-mono); max-height: 420px; }
+
+/* hub */
+.hub { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.face { background: var(--hub-face); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.matrix { display: grid; grid-template-columns: repeat(5, 20px); gap: 6px; }
+.matrix i { width: 20px; height: 20px; border-radius: 4px; background: var(--led-off); }
+.btnrow { display: flex; align-items: center; gap: 14px; }
+.hbtn { width: 30px; height: 22px; border-radius: 6px; border: none; background: #4a5057; cursor: pointer; }
+.hbtn.down { background: #8c949c; }
+.center { width: 34px; height: 34px; border-radius: 50%; border: 4px solid #fff; background: #3a3f45; }
+.hubinfo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.hubinfo b { font: 500 13px var(--f-mono); }
+
+/* feed */
+.feed { list-style: none; margin: 0; padding: 0; height: 200px; overflow: auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.feed:empty::before { content: "Press Run project. Each block the robot runs shows up here."; color: var(--muted); }
+.feed li { display: flex; gap: 8px; padding: 4px 8px; border-radius: 6px; }
+.feed li .t { font: 11px var(--f-mono); color: var(--muted); flex: none; padding-top: 2px; }
+.feed li.now { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.feed li.stack { font-weight: 600; }
+.feed li.note { color: var(--muted); font-style: italic; }
+
+/* ports */
+.ports { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.port { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel-2); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.port .top { display: flex; align-items: center; gap: 8px; }
+.port .letter { width: 22px; height: 22px; border-radius: 6px; background: var(--ink); color: var(--panel); font: 700 13px var(--f-display); display: grid; place-items: center; flex: none; }
+.port select { padding: 2px 4px; font-size: 12px; min-width: 0; flex: 1; }
+.port .val { font: 13px var(--f-mono); min-height: 20px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+footer { padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); color: var(--muted); font-size: 13px; max-width: 90ch; }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none !important; } .blk { transition: none; } .blk.running { transform: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>FFL Emulator</h1>
+  <span class="pill" id="runPill" data-run="0"><span class="dot"></span><span id="runText">No program running</span></span>
+  <span class="spacer"></span>
+  <button class="btn" id="soundBtn" aria-pressed="false">Sound off</button>
+  <button class="btn stop" id="stopBtn" disabled>Stop program</button>
+</header>
+
+<main>
+  <section class="card projbar" id="drop">
+    <div class="what">
+      <h2>Project</h2>
+      <div class="name" id="projName">Example: Color stripes</div>
+      <div class="hint" id="projHint">Drop a SPIKE <b>.llsp3</b> file here, or choose one. In the SPIKE app use File, then Save to your device.</div>
+      <div class="hint err" id="projErr" hidden></div>
+    </div>
+    <label class="btn" for="projIn">Choose .llsp3 file</label>
+    <input type="file" id="projIn" accept=".llsp3" hidden>
+    <button class="btn" id="exampleBtn">Load the example</button>
+    <button class="btn primary" id="runBtn">Run project</button>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <div class="toolbar">
+        <select id="matSel" aria-label="Mat"></select>
+        <button class="btn small" id="resetBtn">Back to start</button>
+        <button class="btn small" id="rotL">Turn left</button>
+        <button class="btn small" id="rotR">Turn right</button>
+        <button class="btn small" id="trailBtn">Clear trail</button>
+        <span class="hint" id="matHint"></span>
+      </div>
+      <canvas id="mat" aria-label="Robot on the mat"></canvas>
+      <div class="readout" id="readout"></div>
+    </section>
+    <section class="card">
+      <div class="toolbar"><h2>Program</h2><span class="spacer"></span><span class="hint">Blocks light up while they run.</span></div>
+      <div class="blocks" id="blocks"></div>
+      <pre class="pysrc" id="pysrc" hidden></pre>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <div class="hub">
+        <div class="face">
+          <div class="matrix" id="matrix"></div>
+          <div class="btnrow">
+            <button class="hbtn" id="btnL" aria-label="Left button"></button>
+            <div class="center" id="centerLight"></div>
+            <button class="hbtn" id="btnR" aria-label="Right button"></button>
+          </div>
+        </div>
+        <div class="hubinfo">
+          <h2>Hub</h2>
+          <div>Yaw angle <b id="yaw">0°</b></div>
+          <div class="hint">Hold the side buttons to press them. Drag the robot to move it; scroll on it to turn it.</div>
+        </div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="toolbar"><h2>What the robot is doing</h2></div>
+      <ol class="feed" id="feed" aria-live="polite"></ol>
+    </section>
+    <section class="card">
+      <div class="toolbar"><h2>Ports</h2><span class="spacer"></span><button class="btn small" id="cfgReset">Default robot</button></div>
+      <div class="ports" id="ports"></div>
+    </section>
+  </div>
+</main>
+<footer>
+  Runs entirely in your browser; project files never leave your computer. To connect the real SPIKE app over Bluetooth,
+  use the Mac version in the <a href="https://github.com/nsobhan/FFL-Emulator">FFL-Emulator repository</a>.
+  Not affiliated with the LEGO Group. LEGO and SPIKE are trademarks of the LEGO Group.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
