@@ -1,0 +1,10 @@
+# local environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# created while running: session logs, programs sent by the app, temp run folders
+logs/
+uploads/
+run/

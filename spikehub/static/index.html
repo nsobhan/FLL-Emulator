@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: workbench. Mat on the left, the hub and its six ports on the right, programs and logs below. */
+:root {
+  --bg: #eceee9; --panel: #ffffff; --panel-2: #f5f6f2; --ink: #1c2024; --muted: #5f6870;
+  --line: #d6d9d2; --accent: #ffc917; --accent-ink: #2a2100; --ok: #1f9d6b; --warn: #c98a00;
+  --bad: #c8412f; --hub-face: #23272b; --led-off: #30353a; --led-on: #fff6d8;
+  --mat: #fbfbf8; --grid: #e7e9e2; --wall: #6b6f73;
+  --f-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181b; --panel: #1e2226; --panel-2: #252a2f; --ink: #e9ece8; --muted: #9aa3aa;
+    --line: #343a40; --accent: #ffc917; --accent-ink: #2a2100; --ok: #3cc48c; --warn: #e2a821;
+    --bad: #ef6a56; --hub-face: #0f1113; --led-off: #2a2f34; --led-on: #fff6d8;
+    --mat: #f4f4ef; --grid: #e2e4dc; --wall: #6b6f73; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181b; --panel: #1e2226; --panel-2: #252a2f; --ink: #e9ece8; --muted: #9aa3aa;
+  --line: #343a40; --accent: #ffc917; --accent-ink: #2a2100; --ok: #3cc48c; --warn: #e2a821;
+  --bad: #ef6a56; --hub-face: #0f1113; --led-off: #2a2f34; --led-on: #fff6d8;
+  --mat: #f4f4ef; --grid: #e2e4dc; --wall: #6b6f73; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); }
+button, select, input, textarea { font: inherit; color: inherit; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.logo { width: 22px; height: 22px; border-radius: 5px; background: var(--accent);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 4px; }
+.logo i { background: var(--accent-ink); border-radius: 1px; opacity: .85; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); font-weight: 500; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.pill[data-s="advertising"] .dot { background: var(--warn); animation: pulse 1.4s infinite; }
+.pill[data-s="connected"] .dot { background: var(--ok); }
+.pill[data-s="error"] .dot, .pill[data-s="unavailable"] .dot { background: var(--bad); }
+.pill[data-run="1"] .dot { background: var(--ok); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none !important; } }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--panel); padding: 7px 14px; border-radius: 8px;
+  cursor: pointer; font-weight: 500; }
+.btn:hover { background: var(--panel-2); }
+.btn:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.stop { background: var(--bad); color: #fff; border-color: transparent; }
+.btn.stop:disabled { opacity: .4; cursor: default; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); }
+@media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hint { color: var(--muted); font-size: 13px; }
+select { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 8px; }
+#matWrap { position: relative; width: 100%; }
+#mat { width: 100%; display: block; border-radius: 8px; touch-action: none; cursor: grab; }
+#mat.dragging { cursor: grabbing; }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font: 12px var(--f-mono); color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+
+/* hub face */
+.hub { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.face { background: var(--hub-face); border-radius: 16px; padding: 14px; width: 172px; display: flex;
+  flex-direction: column; align-items: center; gap: 12px; }
+.matrix { display: grid; grid-template-columns: repeat(5, 22px); gap: 6px; }
+.matrix i { width: 22px; height: 22px; border-radius: 4px; background: var(--led-off); transition: background .06s; }
+.btnrow { display: flex; align-items: center; gap: 14px; }
+.hbtn { width: 30px; height: 22px; border-radius: 6px; border: none; background: #4a5057; cursor: pointer; }
+.hbtn:active, .hbtn.down { background: #8c949c; }
+.center { width: 34px; height: 34px; border-radius: 50%; border: 4px solid #fff; background: #3a3f45;
+  box-shadow: 0 0 10px 1px rgba(255,255,255,.35); }
+.hubinfo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.hubinfo b { font-family: var(--f-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ports */
+.ports { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.port { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel-2);
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.port .top { display: flex; align-items: center; gap: 8px; }
+.port .letter { width: 22px; height: 22px; border-radius: 6px; background: var(--ink); color: var(--panel);
+  font: 700 13px var(--f-display); display: grid; place-items: center; flex: none; }
+.port select { padding: 2px 4px; font-size: 12px; min-width: 0; flex: 1; }
+.port .val { font: 13px var(--f-mono); font-variant-numeric: tabular-nums; min-height: 20px; display: flex;
+  align-items: center; gap: 6px; flex-wrap: wrap; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; flex: 1; min-width: 40px; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+
+/* action feed */
+.feed { list-style: none; margin: 0; padding: 0; height: 200px; overflow: auto; display: flex;
+  flex-direction: column; gap: 2px; font-size: 13px; }
+.feed:empty::before { content: "Press Play in the SPIKE app. Each block the robot runs shows up here."; color: var(--muted); }
+.feed li { display: flex; gap: 8px; padding: 4px 8px; border-radius: 6px; min-width: 0; }
+.feed li .t { font: 11px var(--f-mono); color: var(--muted); flex: none; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.feed li .x { min-width: 0; overflow-wrap: anywhere; }
+.feed li.now { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.feed li.stack { font-weight: 600; }
+.feed li.note { color: var(--muted); font-style: italic; }
+
+/* project file drop zone */
+.drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; justify-content: space-between;
+  border: 2px dashed var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.drop p { margin: 4px 0 0; max-width: 60ch; }
+.err { color: var(--bad); }
+h2.sub { margin: 16px 0 8px; }
+
+/* block view */
+:root { --c-events: #f4b400; --c-move: #e84ba8; --c-motor: #1e88e5; --c-light: #8a63d2; --c-sound: #b84bd6;
+  --c-sensors: #19a7c7; --c-control: #f08a19; --c-operators: #4caf50; --c-variables: #ef6c00;
+  --c-myblocks: #e0475b; --c-other: #7d868d; }
+.pname { font-family: var(--f-display); font-size: 16px; }
+.blocks { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; max-height: 520px; overflow: auto;
+  padding: 4px; }
+.script { display: flex; flex-direction: column; min-width: 0; }
+.blk { --c: var(--c-other); background: var(--c); color: #fff; font-weight: 600; font-size: 13px; line-height: 1.3;
+  padding: 7px 12px; border-radius: 6px; margin-top: 2px; width: fit-content; max-width: 100%;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); transition: box-shadow .1s, transform .1s; overflow-wrap: anywhere; }
+.blk.hat { border-radius: 16px 16px 6px 6px; padding-top: 10px; }
+.cwrap { --c: var(--c-control); border-left: 14px solid var(--c); border-radius: 6px; margin-top: 2px;
+  padding: 0 0 8px; display: flex; flex-direction: column; }
+.cwrap > .blk { margin: 0 0 0 -14px; border-radius: 6px 6px 6px 0; }
+.cwrap .inner { padding: 2px 0 2px 6px; display: flex; flex-direction: column; min-height: 22px; }
+.cwrap .elselbl { background: var(--c); color: #fff; font-weight: 600; font-size: 13px; padding: 4px 12px;
+  margin-left: -14px; width: 80px; border-radius: 0 6px 6px 0; }
+.blk.running { box-shadow: 0 0 0 3px var(--fg, #fff), 0 0 0 6px var(--c), 0 0 18px var(--c); transform: translateX(3px); }
+:root .blk.running { --fg: var(--panel); }
+.pysrc { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  overflow: auto; font: 12px/1.5 var(--f-mono); max-height: 420px; }
+@media (prefers-reduced-motion: reduce) { .blk { transition: none; } .blk.running { transform: none; } }
+
+/* console */
+.console { background: var(--hub-face); color: #e5e8e3; border-radius: 8px; padding: 10px; height: 180px;
+  overflow: auto; font: 12px/1.5 var(--f-mono); white-space: pre-wrap; word-break: break-word; }
+.console .err { color: #ff9b8a; }
+.console:empty::before { content: "print() output from the program shows up here."; color: #7d858c; }
+
+/* bottom tabs */
+.bottom { grid-column: 1 / -1; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px -4px 12px; flex-wrap: wrap; }
+.tabs button { border: none; background: none; padding: 8px 12px; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; font-weight: 500; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+textarea { width: 100%; min-height: 160px; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  font: 12px/1.5 var(--f-mono); background: var(--panel-2); resize: vertical; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.logwrap { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font: 12px var(--f-mono); }
+td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.hex { color: var(--muted); word-break: break-all; }
+td.dir { white-space: nowrap; color: var(--muted); }
+tr.in td.dir { color: var(--ok); }
+tr.out td.dir { color: var(--warn); }
+.slots { display: flex; flex-direction: column; gap: 8px; }
+.slot { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel-2); flex-wrap: wrap; }
+.slot b { font-family: var(--f-mono); }
+details.src summary { cursor: pointer; color: var(--muted); margin-top: 10px; }
+details.src pre { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  overflow: auto; font: 12px/1.5 var(--f-mono); max-height: 300px; }
+.steps { margin: 0; padding-left: 20px; max-width: 70ch; }
+.steps li { margin: 4px 0; }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Virtual Hub</h1>
+  <span class="pill" id="blePill" data-s="starting"><span class="dot"></span><span id="bleText">Starting Bluetooth…</span></span>
+  <span class="pill" id="runPill" data-run="0"><span class="dot"></span><span id="runText">No program running</span></span>
+  <span class="spacer"></span>
+  <button class="btn" id="soundBtn" aria-pressed="false">Sound off</button>
+  <button class="btn stop" id="stopBtn" disabled>Stop program</button>
+</header>
+
+<main>
+  <div class="stack">
+  <section class="card">
+    <div class="toolbar">
+      <select id="matSel" aria-label="Mat"></select>
+      <button class="btn small" id="resetBtn">Back to start</button>
+      <button class="btn small" id="rotL" title="Turn robot left 15°">Turn left</button>
+      <button class="btn small" id="rotR" title="Turn robot right 15°">Turn right</button>
+      <button class="btn small" id="trailBtn">Clear trail</button>
+      <span class="hint" id="matHint"></span>
+    </div>
+    <div id="matWrap"><canvas id="mat" width="1000" height="600" aria-label="Robot on the mat"></canvas></div>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <section class="card" id="programCard" hidden>
+    <div class="toolbar">
+      <h2>Program</h2>
+      <b class="pname" id="projName"></b>
+      <span class="spacer"></span>
+      <button class="btn primary small" id="runProject">Run project</button>
+    </div>
+    <p class="hint" id="projHint">Blocks light up while they run.</p>
+    <div class="blocks" id="blocks"></div>
+    <pre class="pysrc" id="projPython" hidden></pre>
+  </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <div class="hub">
+        <div class="face">
+          <div class="matrix" id="matrix"></div>
+          <div class="btnrow">
+            <button class="hbtn" id="btnL" aria-label="Left button"></button>
+            <div class="center" id="centerLight"></div>
+            <button class="hbtn" id="btnR" aria-label="Right button"></button>
+          </div>
+        </div>
+        <div class="hubinfo">
+          <h2>Hub</h2>
+          <div>Yaw <b id="yaw">0°</b></div>
+          <div>Name <b id="hubName">–</b></div>
+          <div>Firmware <b id="fw">–</b></div>
+          <div class="hint">Hold the side buttons to press them. Drag the robot on the mat to move it.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar"><h2>What the robot is doing</h2><span class="spacer"></span>
+        <span class="hint" id="progTitle"></span></div>
+      <ol class="feed" id="feed" aria-live="polite"></ol>
+    </section>
+
+    <section class="card">
+      <div class="toolbar"><h2>Ports</h2><span class="spacer"></span>
+        <button class="btn small" id="cfgReset">Default robot</button></div>
+      <div class="ports" id="ports"></div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar"><h2>Console</h2><span class="spacer"></span>
+        <button class="btn small" id="clearConsole">Clear</button></div>
+      <div class="console" id="console" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <section class="card bottom">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="connect">Connect the app</button>
+      <button role="tab" aria-selected="false" data-tab="slots">Programs from the app</button>
+      <button role="tab" aria-selected="false" data-tab="try">Try without the app</button>
+      <button role="tab" aria-selected="false" data-tab="log">Bluetooth log</button>
+    </div>
+    <div data-panel="connect">
+      <ol class="steps">
+        <li>Keep this window open on the Mac. The status at the top should say <b>Waiting for the app</b>.</li>
+        <li>On the laptop, use Chrome with the <b>Show Virtual Hub</b> extension installed (one time setup, below).
+          Without it, the SPIKE app hides the virtual hub, because a Mac can't send the LEGO data the app looks for.</li>
+        <li>Open the SPIKE app in Chrome and start a project.</li>
+        <li>Click <b>Connect</b>, choose Bluetooth, and pick <b id="nameInSteps">Sim Hub</b> from the list.</li>
+        <li>Build a program and press <b>Play</b>. The robot here runs it.</li>
+      </ol>
+      <details class="src">
+        <summary>Install the extension on the laptop (one time)</summary>
+        <ol class="steps">
+          <li>Copy <code>show-virtual-hub-extension.zip</code> from the <code>spike-hub-emulator</code> folder to the laptop and unzip it.</li>
+          <li>In Chrome, open <code>chrome://extensions</code> and turn on <b>Developer mode</b> (top right).</li>
+          <li>Click <b>Load unpacked</b> and choose the unzipped <code>laptop-extension</code> folder.</li>
+          <li>Reload the SPIKE app tab.</li>
+        </ol>
+      </details>
+      <details class="src">
+        <summary>Quick test without installing: paste into the SPIKE tab's console</summary>
+        <p class="hint">On the laptop, in the SPIKE app tab, press Ctrl+Shift+J (Cmd+Option+J on a Mac), paste this,
+          press Enter, then click Connect. It lasts until the tab is reloaded.</p>
+        <pre id="snippet"></pre>
+        <button class="btn small" id="copySnippet">Copy</button>
+      </details>
+      <p class="hint">Default robot: drive motors on A (left) and B (right), color sensor on C, distance sensor on D,
+        force sensor on E, and a spare motor on F. Change the ports above to match how the kids' program is set up.</p>
+    </div>
+    <div data-panel="slots" hidden>
+      <div class="slots" id="slots"></div>
+      <details class="src" id="srcBox"><summary>Last program that ran</summary><pre id="srcPre"></pre></details>
+    </div>
+    <div data-panel="try" hidden>
+      <div class="drop" id="drop">
+        <div>
+          <b>Open a SPIKE project file</b>
+          <p class="hint">Drop a <code>.llsp3</code> file here, or pick one. In the SPIKE app, use File, then Save to your device.
+            Word Block and Python projects both work.</p>
+        </div>
+        <label class="btn primary" for="projIn">Choose .llsp3 file</label>
+        <input type="file" id="projIn" accept=".llsp3,.py" hidden>
+      </div>
+      <p class="hint err" id="projErr" hidden></p>
+      <h2 class="sub">Or try a sample Python program</h2>
+      <div class="examples" id="examples"></div>
+      <textarea id="code" spellcheck="false" aria-label="Python program">from hub import port, light_matrix
+import motor_pair, runloop
+
+async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
+    await light_matrix.write("Hi")
+    await motor_pair.move_for_degrees(motor_pair.PAIR_1, 720, 0, velocity=500)
+
+runloop.run(main())
+</textarea>
+      <div class="row">
+        <button class="btn primary" id="runCode">Run this program</button>
+        <label class="btn small" for="fileIn">Open a .py file</label>
+        <input type="file" id="fileIn" accept=".py,.txt" hidden>
+        <span class="hint">Uses the SPIKE App 3 Python commands (hub, motor, motor_pair, color_sensor, …).</span>
+      </div>
+    </div>
+    <div data-panel="log" hidden>
+      <div class="logwrap" id="logWrap"><table><tbody id="logBody"></tbody></table></div>
+      <p class="hint">Every message is also saved in the <code>logs</code> folder, and uploaded programs in <code>uploads</code>.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const COLORS = { black: "#1d1f21", red: "#e0312b", green: "#1aa64a", blue: "#1f6fe0", yellow: "#ffd21a",
+  magenta: "#d03ca8", azure: "#45b4f0", orange: "#ff8a1c", purple: "#7b3fc4", turquoise: "#21c7b8", white: "#ffffff" };
+const COLOR_BY_ID = ["black","magenta","purple","blue","azure","turquoise","green","yellow","orange","red","white"];
+const DEVICE_OPTIONS = [
+  ["", "Empty"], ["motor:medium", "Motor (medium)"], ["motor:large", "Motor (large)"],
+  ["color", "Color sensor"], ["distance", "Distance sensor"], ["force", "Force sensor"]];
+const ROLES = [["left", "left wheel"], ["right", "right wheel"], ["arm", "other"]];
+
+let S = { mats: {}, mat: "playground", config: {}, trail: [], state: null };
+let ws;
+
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "batch") m.items.forEach(handle); else handle(m);
+  };
+  ws.onclose = () => { setBle("error", "Lost contact with the hub program. Is run.py still running?"); setTimeout(connect, 1500); };
+}
+
+function handle(m) {
+  switch (m.type) {
+    case "init":
+      S.mats = m.mats; S.mat = m.mat; S.config = m.config; S.trail = m.trail || [];
+      $("#fw").textContent = m.firmware; $("#hubName").textContent = m.hub_name;
+      $("#nameInSteps").textContent = m.hub_name;
+      fillMats(); buildPorts(); setBle(m.ble, m.ble_detail); renderSlots(m.slots);
+      $("#console").textContent = ""; if (m.console) addConsole(m.console);
+      $("#logBody").textContent = ""; m.log.forEach(addLog);
+      buildExamples(m.examples); setRunning(m.running);
+      $("#feed").textContent = ""; (m.actions || []).forEach(a => addAction(a, false));
+      if (m.project) showProject(m.project); break;
+    case "project": showProject(m); break;
+    case "state": onState(m); break;
+    case "log": addLog(m.item); break;
+    case "ble": setBle(m.state, m.detail); break;
+    case "console": addConsole(m.text); break;
+    case "program": setRunning(m.running); break;
+    case "slots": renderSlots(m.slots); selectTab("slots"); break;
+    case "mat": S.mat = m.mat; $("#matSel").value = m.mat; updateHint(); break;
+    case "config": S.config = m.config; buildPorts(); break;
+    case "program_source": $("#srcPre").textContent = m.source; break;
+    case "actions_reset": $("#feed").textContent = ""; $("#progTitle").textContent = m.title || ""; break;
+    case "action": addAction(m.item, m.replace); break;
+  }
+}
+
+function setBle(s, detail) {
+  const label = { starting: "Starting Bluetooth…", advertising: "Waiting for the app",
+    connected: "App connected", off: "Bluetooth off", error: "Bluetooth problem", unavailable: "Bluetooth unavailable" }[s] || s;
+  $("#blePill").dataset.s = s; $("#bleText").textContent = label; $("#blePill").title = detail || "";
+}
+function setRunning(r) {
+  $("#runPill").dataset.run = r ? "1" : "0";
+  $("#runText").textContent = r ? "Program running" : "No program running";
+  $("#stopBtn").disabled = !r;
+  if (!r) document.querySelectorAll("#feed li.now").forEach(e => e.classList.remove("now"));
+}
+
+// ---------------------------------------------------------- mat
+const cv = $("#mat"), ctx = cv.getContext("2d");
+let scale = 5, pad = 0;
+function fillMats() {
+  const sel = $("#matSel"); sel.textContent = "";
+  for (const [k, v] of Object.entries(S.mats)) sel.add(new Option(v.name, k));
+  sel.value = S.mat; updateHint();
+}
+function updateHint() { $("#matHint").textContent = S.mats[S.mat]?.hint || ""; resize(); }
+function resize() {
+  const mat = S.mats[S.mat]; if (!mat) return;
+  const w = cv.clientWidth || 800, dpr = window.devicePixelRatio || 1;
+  scale = w / mat.w; const h = mat.h * scale;
+  cv.style.height = h + "px"; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+const X = x => x * scale, Y = y => (S.mats[S.mat].h - y) * scale;
+
+function drawMat(st) {
+  const mat = S.mats[S.mat]; if (!mat) return;
+  const css = getComputedStyle(document.documentElement);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = css.getPropertyValue("--mat"); ctx.fillRect(0, 0, X(mat.w), mat.h * scale);
+  ctx.strokeStyle = css.getPropertyValue("--grid"); ctx.lineWidth = 1;
+  for (let x = 10; x < mat.w; x += 10) { ctx.beginPath(); ctx.moveTo(X(x), 0); ctx.lineTo(X(x), Y(0)); ctx.stroke(); }
+  for (let y = 10; y < mat.h; y += 10) { ctx.beginPath(); ctx.moveTo(0, Y(y)); ctx.lineTo(X(mat.w), Y(y)); ctx.stroke(); }
+  for (const s of mat.shapes) {
+    if (s.kind === "rect") { ctx.fillStyle = COLORS[s.color]; ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale); }
+    else if (s.kind === "line") {
+      ctx.strokeStyle = COLORS[s.color]; ctx.lineWidth = s.width * scale; ctx.lineCap = ctx.lineJoin = "round";
+      ctx.beginPath(); s.points.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
+    } else if (s.kind === "wall") {
+      ctx.fillStyle = css.getPropertyValue("--wall"); ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+    }
+  }
+  // start marker
+  const st0 = mat.start; ctx.strokeStyle = "#9aa1a6"; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(X(st0.x), Y(st0.y), 9 * scale, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  // trail
+  if (S.trail.length > 1) {
+    ctx.strokeStyle = "rgba(255,170,0,.8)"; ctx.lineWidth = 2; ctx.beginPath();
+    S.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
+  }
+  if (st) drawRobot(st);
+}
+
+function portOf(type) { return Object.entries(S.config).find(([p, d]) => d.type === type)?.[0]; }
+
+function drawRobot(st) {
+  const r = st.robot, h = -r.heading * Math.PI / 180;
+  // distance ray
+  const dp = portOf("distance");
+  if (dp && st.ports[dp]) {
+    const d = st.ports[dp].distance, a = r.heading * Math.PI / 180;
+    const sx = r.x + 10 * Math.cos(a), sy = r.y + 10 * Math.sin(a), len = d > 0 ? d / 10 : 60;
+    ctx.strokeStyle = d > 0 ? "rgba(31,157,107,.8)" : "rgba(120,120,120,.35)"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(X(sx), Y(sy)); ctx.lineTo(X(sx + len * Math.cos(a)), Y(sy + len * Math.sin(a))); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.save(); ctx.translate(X(r.x), Y(r.y)); ctx.rotate(h); ctx.scale(scale, scale);
+  // wheels
+  ctx.fillStyle = "#2b2f33";
+  ctx.fillRect(-2.8, -8.6, 5.6, 2.2); ctx.fillRect(-2.8, 6.4, 5.6, 2.2);
+  // chassis
+  ctx.fillStyle = "#f4f4f1"; ctx.strokeStyle = "#8b9196"; ctx.lineWidth = .35;
+  roundRect(-8, -6.3, 18, 12.6, 1.6); ctx.fill(); ctx.stroke();
+  // hub on top with the 5x5 matrix
+  ctx.fillStyle = "#ffd21a"; roundRect(-6.5, -4.6, 9.5, 9.2, 1.2); ctx.fill();
+  ctx.fillStyle = "#23272b"; roundRect(-5.9, -4, 8.3, 8, 1); ctx.fill();
+  for (let i = 0; i < 25; i++) {
+    const row = Math.floor(i / 5), col = i % 5, v = st.pixels[i] / 100;
+    // matrix "top" (row 0) faces forward
+    ctx.fillStyle = v > 0 ? `rgba(255,246,216,${0.25 + 0.75 * v})` : "#3a4046";
+    ctx.fillRect(1.3 - row * 1.45, -3.1 + col * 1.3, 1.05, 1.0);
+  }
+  // sensors
+  const cp = portOf("color");
+  if (cp && st.ports[cp]) {
+    const c = COLOR_BY_ID[st.ports[cp].color] || "white";
+    ctx.fillStyle = "#2b2f33"; ctx.beginPath(); ctx.arc(8, 0, 1.6, 0, 7); ctx.fill();
+    ctx.fillStyle = COLORS[c]; ctx.beginPath(); ctx.arc(8, 0, 1, 0, 7); ctx.fill();
+  }
+  if (dp) { ctx.fillStyle = "#2b2f33"; roundRect(9.2, -3, 1.6, 6, .6); ctx.fill();
+    ctx.fillStyle = "#cfd6da"; ctx.beginPath(); ctx.arc(10, -1.5, .8, 0, 7); ctx.arc(10, 1.5, .8, 0, 7); ctx.fill(); }
+  const fp = portOf("force");
+  if (fp && st.ports[fp]) { ctx.fillStyle = st.ports[fp].pressed ? "#1f9d6b" : "#8b9196"; roundRect(10.6, -1, 1, 2, .3); ctx.fill(); }
+  ctx.restore();
+}
+function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+
+// drag + rotate
+let drag = null;
+function toWorld(e) {
+  const b = cv.getBoundingClientRect();
+  return { x: (e.clientX - b.left) / scale, y: S.mats[S.mat].h - (e.clientY - b.top) / scale };
+}
+cv.addEventListener("pointerdown", e => {
+  if (!S.state) return; const p = toWorld(e), r = S.state.robot;
+  if (Math.hypot(p.x - r.x, p.y - r.y) < 12) { drag = { dx: r.x - p.x, dy: r.y - p.y }; cv.setPointerCapture(e.pointerId); cv.classList.add("dragging"); }
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return; const p = toWorld(e);
+  send({ cmd: "place_robot", x: p.x + drag.dx, y: p.y + drag.dy });
+});
+cv.addEventListener("pointerup", () => { drag = null; cv.classList.remove("dragging"); });
+cv.addEventListener("wheel", e => {
+  if (!S.state) return; const p = toWorld(e), r = S.state.robot;
+  if (Math.hypot(p.x - r.x, p.y - r.y) < 15) { e.preventDefault(); rotate(e.deltaY > 0 ? -5 : 5); }
+}, { passive: false });
+function rotate(d) { const r = S.state.robot; send({ cmd: "place_robot", x: r.x, y: r.y, heading: r.heading + d }); }
+$("#rotL").onclick = () => rotate(15); $("#rotR").onclick = () => rotate(-15);
+$("#resetBtn").onclick = () => send({ cmd: "reset_robot" });
+$("#trailBtn").onclick = () => send({ cmd: "clear_trail" });
+$("#matSel").onchange = e => send({ cmd: "set_mat", mat: e.target.value });
+
+// ---------------------------------------------------------- hub
+const mx = $("#matrix"); for (let i = 0; i < 25; i++) mx.appendChild(document.createElement("i"));
+function holdButton(el, onDown, onUp) {
+  el.addEventListener("pointerdown", e => { el.classList.add("down"); el.setPointerCapture(e.pointerId); onDown(); });
+  const up = () => { if (el.classList.contains("down")) { el.classList.remove("down"); onUp(); } };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+}
+holdButton($("#btnL"), () => send({ cmd: "button", name: "left", pressed: true }), () => send({ cmd: "button", name: "left", pressed: false }));
+holdButton($("#btnR"), () => send({ cmd: "button", name: "right", pressed: true }), () => send({ cmd: "button", name: "right", pressed: false }));
+
+// ---------------------------------------------------------- ports
+function buildPorts() {
+  const box = $("#ports"); box.textContent = "";
+  for (const p of "ABCDEF") {
+    const d = S.config[p] || {};
+    const el = document.createElement("div"); el.className = "port"; el.dataset.port = p;
+    const top = document.createElement("div"); top.className = "top";
+    const letter = document.createElement("span"); letter.className = "letter"; letter.textContent = p;
+    const sel = document.createElement("select"); sel.id = "dev" + p; sel.setAttribute("aria-label", "Device on port " + p);
+    DEVICE_OPTIONS.forEach(([v, t]) => sel.add(new Option(t, v)));
+    sel.value = d.type === "motor" ? "motor:" + (d.model || "medium") : (d.type || "");
+    sel.onchange = () => {
+      const [type, model] = sel.value.split(":"); const cfg = structuredClone(S.config);
+      cfg[p] = type ? { type, ...(model ? { model, role: cfg[p]?.role || "arm" } : {}) } : {};
+      send({ cmd: "config", config: cfg });
+    };
+    top.append(letter, sel);
+    el.appendChild(top);
+    if (d.type === "motor") {
+      const rs = document.createElement("select"); rs.id = "role" + p; rs.setAttribute("aria-label", "Motor role on port " + p);
+      ROLES.forEach(([v, t]) => rs.add(new Option(t, v))); rs.value = d.role || "arm";
+      rs.onchange = () => { const cfg = structuredClone(S.config); cfg[p].role = rs.value; send({ cmd: "config", config: cfg }); };
+      el.appendChild(rs);
+    }
+    const val = document.createElement("div"); val.className = "val"; val.id = "val" + p; el.appendChild(val);
+    if (d.type === "force") {
+      const b = document.createElement("button"); b.className = "btn small"; b.textContent = "Hold to press";
+      holdButton(b, () => send({ cmd: "force", pressed: true }), () => send({ cmd: "force", pressed: false }));
+      el.appendChild(b);
+    }
+    box.appendChild(el);
+  }
+}
+$("#cfgReset").onclick = () => send({ cmd: "reset_config" });
+
+function portText(p, info) {
+  const el = $("#val" + p); if (!el) return;
+  if (info.type === "motor") el.textContent = `${info.position}°  ${info.speed}°/s`;
+  else if (info.type === "color") {
+    const name = info.color < 0 ? "none" : COLOR_BY_ID[info.color];
+    el.innerHTML = `<span class="swatch" style="background:${COLORS[name] || "transparent"}"></span>${name} · ${info.reflection}%`;
+  } else if (info.type === "distance") el.textContent = info.distance < 0 ? "nothing in range" : `${(info.distance / 10).toFixed(1)} cm`;
+  else if (info.type === "force") el.innerHTML = `<span class="bar"><i style="width:${info.force}%"></i></span>${info.pressed ? "pressed" : "released"}`;
+  else el.textContent = "–";
+}
+
+// ---------------------------------------------------------- state loop
+function addAction(item, replace) {
+  const feed = $("#feed");
+  const atEnd = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 4;
+  let li = replace ? feed.lastElementChild : null;
+  if (!li) { li = document.createElement("li"); feed.appendChild(li); }
+  li.className = /^[▶■]/.test(item.text) ? "stack" : item.note ? "note" : "";
+  li.innerHTML = `<span class="t"></span><span class="x"></span>`;
+  li.querySelector(".t").textContent = item.t; li.querySelector(".x").textContent = item.text;
+  feed.querySelectorAll("li.now").forEach(e => e.classList.remove("now"));
+  if (S.state?.running !== false) li.classList.add("now");
+  while (feed.children.length > 300) feed.firstChild.remove();
+  if (atEnd || !replace) feed.scrollTop = feed.scrollHeight;
+}
+
+let configVersion = -1;
+function onState(st) {
+  S.state = st;
+  if (st.config_version !== configVersion) {
+    if (configVersion !== -1) { S.config = st.config; buildPorts(); }
+    configVersion = st.config_version;
+  }
+  if (st.trail_reset) S.trail = [];
+  if (st.trail_add?.length) S.trail.push(...st.trail_add);
+  st.pixels.forEach((v, i) => { mx.children[i].style.background = v > 0
+    ? `color-mix(in srgb, var(--led-on) ${30 + v * 0.7}%, var(--led-off))` : ""; });
+  $("#centerLight").style.borderColor = COLORS[st.light] || "#fff";
+  $("#centerLight").style.boxShadow = `0 0 12px 2px ${COLORS[st.light] || "#fff"}`;
+  $("#yaw").textContent = `${st.yaw.toFixed(1)}°`;
+  for (const [p, info] of Object.entries(st.ports)) portText(p, info);
+  const r = st.robot;
+  $("#readout").textContent = `x ${r.x.toFixed(1)} cm   y ${r.y.toFixed(1)} cm   heading ${(((r.heading % 360) + 360) % 360).toFixed(0)}°`;
+  st.events.forEach(playEvent);
+  highlight(st.active || []);
+  setRunning(st.running);
+  drawMat(st);
+}
+
+// ---------------------------------------------------------- console + log
+function addConsole(text) {
+  const c = $("#console"); const atEnd = c.scrollTop + c.clientHeight >= c.scrollHeight - 4;
+  const span = document.createElement("span"); span.textContent = text;
+  if (/Traceback|Error/.test(text)) span.className = "err";
+  c.appendChild(span); if (atEnd) c.scrollTop = c.scrollHeight;
+}
+$("#clearConsole").onclick = () => { $("#console").textContent = ""; send({ cmd: "clear_console" }); };
+function addLog(it) {
+  const tr = document.createElement("tr"); tr.className = it.dir === "app→hub" ? "in" : it.dir === "hub→app" ? "out" : "";
+  [["t", it.t], ["dir", it.dir], ["", it.text], ["hex", it.hex]].forEach(([c, t]) => {
+    const td = document.createElement("td"); td.className = c; td.textContent = t; tr.appendChild(td); });
+  const body = $("#logBody"); body.appendChild(tr);
+  while (body.children.length > 400) body.firstChild.remove();
+  const w = $("#logWrap"); w.scrollTop = w.scrollHeight;
+}
+function renderSlots(slots) {
+  const box = $("#slots"); box.textContent = "";
+  const entries = Object.entries(slots || {});
+  if (!entries.length) { box.innerHTML = '<p class="hint">Nothing yet. When a kid presses Play in the SPIKE app, the program is sent here and listed in this tab.</p>'; return; }
+  for (const [slot, s] of entries) {
+    const el = document.createElement("div"); el.className = "slot";
+    el.innerHTML = `<span>Slot <b>${slot}</b></span><span class="nm"></span><span class="hint"></span><span class="spacer"></span>`;
+    el.querySelector(".nm").textContent = s.title || s.name;
+    el.querySelector(".hint").textContent = `${(s.files || [s.name]).join(", ")} · ${s.size} bytes`;
+    const b = document.createElement("button"); b.className = "btn small"; b.textContent = "Run again";
+    b.onclick = () => send({ cmd: "run_slot", slot }); el.appendChild(b); box.appendChild(el);
+  }
+}
+
+// ---------------------------------------------------------- examples / code
+function buildExamples(list) {
+  const box = $("#examples"); box.textContent = "";
+  list.forEach(ex => { const b = document.createElement("button"); b.className = "btn"; b.textContent = ex.name;
+    b.onclick = () => send({ cmd: "run_example", key: ex.key }); box.appendChild(b); });
+}
+$("#runCode").onclick = () => send({ cmd: "run_source", source: $("#code").value, name: "typed program" });
+$("#fileIn").onchange = async e => { const f = e.target.files[0]; if (f) { $("#code").value = await f.text(); } };
+$("#stopBtn").onclick = () => send({ cmd: "stop" });
+
+// ---------------------------------------------------------- tabs
+function selectTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== name);
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => selectTab(b.dataset.tab));
+
+// ---------------------------------------------------------- sound
+let audio = null;
+$("#soundBtn").onclick = () => {
+  if (audio) { audio.close(); audio = null; } else { audio = new AudioContext(); }
+  $("#soundBtn").textContent = audio ? "Sound on" : "Sound off"; $("#soundBtn").setAttribute("aria-pressed", !!audio);
+};
+function playEvent(ev) {
+  if (ev.type === "notice") {
+    addAction({ t: new Date().toTimeString().slice(0, 8), text: ev.text, note: true }, false);
+    return;
+  }
+  if (ev.type === "sound") {
+    if (audio && ev.file) { const a = new Audio("/project/sound/" + encodeURIComponent(ev.file)); a.play().catch(() => {}); }
+    return;
+  }
+  if (ev.type !== "beep" || !audio) return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = ev.freq; g.gain.value = 0.15 * (ev.volume / 100);
+  o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + ev.duration / 1000);
+}
+
+// ---------------------------------------------------------- console snippet for the laptop
+fetch("/laptop/show-virtual-hub.js").then(r => r.text()).then(t => {
+  $("#snippet").textContent = t.split("\n").filter(l => !l.trim().startsWith("//")).join("\n").trim();
+});
+$("#copySnippet").onclick = async () => {
+  try { await navigator.clipboard.writeText($("#snippet").textContent); $("#copySnippet").textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents($("#snippet")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+};
+
+// ---------------------------------------------------------- project files and the block view
+let blockEls = new Map(), lit = new Set();
+function showProject(p) {
+  $("#programCard").hidden = false;
+  $("#projName").textContent = p.name;
+  const box = $("#blocks"); box.textContent = ""; blockEls = new Map(); lit = new Set();
+  const isPy = p.type === "python";
+  $("#projPython").hidden = !isPy; box.hidden = isPy;
+  $("#projHint").textContent = isPy ? "Python project. Its output shows in the console and the feed."
+    : "Blocks light up while they run. Click Run project to start.";
+  if (isPy) { $("#projPython").textContent = p.python; $("#code").value = p.python; return; }
+  if (!p.scripts.length) { box.innerHTML = '<p class="hint">This project has no blocks under a "when" block yet.</p>'; return; }
+  p.scripts.forEach(sc => { const d = document.createElement("div"); d.className = "script"; renderSeq(sc, d); box.appendChild(d); });
+}
+function renderSeq(nodes, parent) {
+  for (const n of nodes) {
+    const b = document.createElement("div");
+    b.className = "blk" + (n.hat ? " hat" : ""); b.style.setProperty("--c", `var(--c-${n.cat})`);
+    b.textContent = n.text; blockEls.set(n.id, b);
+    if (n.body) {
+      const w = document.createElement("div"); w.className = "cwrap"; w.style.setProperty("--c", `var(--c-${n.cat})`);
+      const inner = document.createElement("div"); inner.className = "inner"; renderSeq(n.body, inner);
+      w.append(b, inner);
+      if (n.else) {
+        const lbl = document.createElement("div"); lbl.className = "elselbl"; lbl.textContent = "else";
+        const inner2 = document.createElement("div"); inner2.className = "inner"; renderSeq(n.else, inner2);
+        w.append(lbl, inner2);
+      }
+      parent.appendChild(w);
+    } else parent.appendChild(b);
+  }
+}
+function highlight(ids) {
+  const now = new Set(ids);
+  for (const id of lit) if (!now.has(id)) blockEls.get(id)?.classList.remove("running");
+  for (const id of now) if (!lit.has(id)) {
+    const el = blockEls.get(id); if (!el) continue;
+    el.classList.add("running");
+    const box = $("#blocks"), r = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+    if (r.top < br.top || r.bottom > br.bottom) box.scrollTop += r.top - br.top - br.height / 3;
+  }
+  lit = now;
+}
+async function openProject(file) {
+  $("#projErr").hidden = true;
+  try {
+    const res = await fetch("/api/project", { method: "POST", body: file, headers: { "X-Filename": file.name } });
+    const info = await res.json();
+    if (!res.ok) throw new Error(info.error || "Couldn't open that file.");
+    showProject(info);
+    $("#programCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) { $("#projErr").textContent = e.message; $("#projErr").hidden = false; }
+}
+$("#projIn").onchange = e => { const f = e.target.files[0]; if (f) openProject(f); e.target.value = ""; };
+const drop = $("#drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) openProject(f); });
+$("#runProject").onclick = () => send({ cmd: "run_project" });
+
+connect();
+</script>
+</body>
+</html>

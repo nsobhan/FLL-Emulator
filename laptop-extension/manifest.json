@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Show Virtual Hub",
+  "version": "1.0",
+  "description": "Lists the virtual SPIKE Prime hub (running on a Mac) in the SPIKE web app's Bluetooth picker.",
+  "content_scripts": [
+    {
+      "matches": ["https://spike.legoeducation.com/*"],
+      "js": ["show-virtual-hub.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ]
+}
