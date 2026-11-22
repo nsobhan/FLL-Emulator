@@ -1,4 +1,4 @@
-# FFL Emulator
+# FLL Emulator
 
 A virtual LEGO® Education SPIKE™ Prime hub for practising without the robot. It runs on a Mac and
 shows a simulated robot driving on a mat in the browser.
@@ -15,7 +15,7 @@ This is an independent project and is not made, endorsed or supported by the LEG
 
 ## Try it in the browser
 
-**https://nsobhan.github.io/FFL-Emulator/** opens the browser version. Drop in a `.llsp3`
+**https://nsobhan.github.io/FLL-Emulator/** opens the browser version. Drop in a `.llsp3`
 Word Blocks project and watch the robot run it, block by block. Everything runs on your own
 computer, and project files aren't uploaded anywhere. It's the `web/` folder: the same robot
 simulator and Word Blocks interpreter, ported to JavaScript. Connecting the real SPIKE app over
