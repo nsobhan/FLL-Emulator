@@ -137,6 +137,37 @@ MATS = {
                   for i, (c, n) in enumerate([("#e0312b", "Red baton"), ("#1f6fe0", "Blue baton"),
                                               ("#ffd21a", "Yellow baton"), ("#1aa64a", "Green baton")])],
     },
+    "camp3stop": {
+        "name": "Camp 3: Stop at the line", "w": 160, "h": 100,
+        "start": {"x": 30, "y": 50, "heading": 0},
+        "hint": "Drive forward and stop on the black line.",
+        "shapes": [
+            {"kind": "line", "color": "black", "width": 2.5, "points": [[95, 15], [95, 85]]},
+            {"kind": "label", "x": 95, "y": 90, "text": "STOP HERE"},
+            {"kind": "label", "x": 30, "y": 38, "text": "START"},
+        ],
+    },
+    "camp3follow": {
+        "name": "Camp 3: Follow the line", "w": 160, "h": 100,
+        "start": {"x": 72, "y": 18.8, "heading": 0},
+        "hint": "Follow the black loop with the color sensor. How fast can you go without losing the line?",
+        "shapes": [{"kind": "line", "color": "black", "width": 2.5, "points": _oval(80, 50, 55, 30, 72)}],
+    },
+    "camp3ideas": {
+        "name": "Camp 3: Line ideas", "w": 160, "h": 100,
+        "start": {"x": 14, "y": 18.8, "heading": 0},
+        "hint": "A right angle, a T-junction, a gap and a red line across the path. What does your line follower do at each one?",
+        "shapes": [
+            {"kind": "line", "color": "black", "width": 2.5, "points": [[22, 20], [70, 20], [70, 60], [96, 60]]},
+            {"kind": "line", "color": "black", "width": 2.5, "points": [[70, 40], [45, 40]]},
+            {"kind": "line", "color": "black", "width": 2.5, "points": [[104, 60], [128, 60], [148, 80]]},
+            {"kind": "rect", "color": "red", "x": 118, "y": 52, "w": 3, "h": 16},
+            {"kind": "label", "x": 82, "y": 13, "text": "right angle"},
+            {"kind": "label", "x": 50, "y": 46, "text": "T-junction"},
+            {"kind": "label", "x": 100, "y": 67, "text": "gap"},
+            {"kind": "label", "x": 120, "y": 74, "text": "red line"},
+        ],
+    },
     "maze": {
         "name": "Maze", "w": 160, "h": 120,
         "start": {"x": 20, "y": 18, "heading": 90},

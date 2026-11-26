@@ -21,6 +21,21 @@ computer, and project files aren't uploaded anywhere. It's the `web/` folder: th
 simulator and Word Blocks interpreter, ported to JavaScript. Connecting the real SPIKE app over
 Bluetooth, and running Python projects, need the Mac version below.
 
+## Learning camps
+
+Built-in lessons that follow LEGO Education's SPIKE Prime *Competition Ready* training camps. Each one has its own mat, a
+ready-made Word Blocks program, and a camp guide (steps, why the numbers work, challenges, Python version).
+Pick them from **Load an example… → Learning camps**.
+
+| Camp | Mats | What the robot does | Robot |
+| --- | --- | --- | --- |
+| 1 · Driving around | Drive a square | repeat 4: move 40 cm, turn left (steering −100, 0.5 rotations) | drive C+D |
+| 2 · Playing with objects | Stop and grab, Relay race | stop 8 cm from the marker with the distance sensor, grab the cube with the arm, bring it home | drive C+D, arm E, distance F |
+| 3 · Reacting to lines | Stop at the line, Follow the line, Line ideas | stop when reflected light drops below 50 %; follow the line's edge with steering 50 / −50 | drive C+D, color B |
+
+The lesson pages don't list ports or exact values, so these choices are this project's, matching the kids'
+own competition programs.
+
 ## Setup (macOS)
 
 ```bash

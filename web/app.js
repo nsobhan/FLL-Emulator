@@ -1,5 +1,5 @@
-import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js?v=3";
-import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js?v=3";
+import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js?v=4";
+import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js?v=4";
 
 const $ = s => document.querySelector(s);
 const COLORS = { black: "#1d1f21", red: "#e0312b", green: "#1aa64a", blue: "#1f6fe0", yellow: "#ffd21a", magenta: "#d03ca8",
@@ -222,6 +222,90 @@ async def main():
 runloop.run(main())</pre>
 </details>`;
 
+// Learning camp 3 (Competition-Ready "Training Camp 3: React to Lines").
+// Driving Base with a Color Sensor on B, reading reflected light; drive motors C (left) + D (right).
+function camp3Program(name, follow) {
+  const { p, add, menu, lit, chain, dir } = builder(name);
+  const onBlack = () => add("flippersensors_isReflectivity", { inputs: { PORT: [1, menu("flippersensors_color-sensor-selector", "B")], VALUE: lit(50) }, fields: { COMPARATOR: ["<", null] } });
+  const steer = v => add("flippermove_startSteer", { inputs: { STEERING: [1, menu("flippermove_rotation-wheel", String(v))] } });
+  const setup = [
+    add("flipperevents_whenProgramStarts", { top: true }),
+    add("flippermove_setMovementPair", { inputs: { PAIR: [1, menu("flippermove_movement-port-selector", "CD")] } }),
+    add("flippermove_movementSpeed", { inputs: { SPEED: lit(30) } }),
+  ];
+  if (follow) {
+    const ifElse = add("control_if_else", { inputs: { CONDITION: [2, onBlack()], SUBSTACK: [2, steer(50)], SUBSTACK2: [2, steer(-50)] } });
+    chain([...setup, add("control_forever", { inputs: { SUBSTACK: [2, ifElse] } })]);
+  } else {
+    chain([...setup,
+      add("flippermove_startMove", { inputs: { DIRECTION: dir("forward") } }),
+      add("control_wait_until", { inputs: { CONDITION: [2, onBlack()] } }),
+      add("flippermove_stopMove"),
+      add("flippersound_beepForTime", { inputs: { NOTE: lit(72), DURATION: lit(0.2) } }),
+    ]);
+  }
+  return p;
+}
+
+const CAMP3_GUIDE = `
+<h3>Camp 3 · Reacting to lines</h3>
+<p><b>Goal:</b> use the color sensor to stop at a black line, then follow a black line.</p>
+<p><b>Robot:</b> the Driving Base with a <b>Color Sensor on B</b> pointing down at the mat, driving with C (left) and D (right).
+The sensor measures <b>reflected light</b>: white mat ≈ 100 %, black line ≈ 6 %. Halfway, <b>50 %</b>, is a good line between "black" and "white".
+Watch port B in the Ports panel while the robot moves.</p>
+<h4>Steps</h4>
+<ol>
+  <li><b>Stop at the line.</b> <i>start moving ↑ forward</i>, <i>wait until B reflection is &lt; 50 %</i>, <i>stop moving</i>.
+    This is the <b>Camp 3: Stop at the line</b> example. Try it from different starting spots. It always finds the line.</li>
+  <li><b>Follow the line.</b> In a <i>forever</i> loop: if B reflection is &lt; 50 % (on black), <i>start moving steering 50</i>.
+    Otherwise (on white), <i>start moving steering −50</i>. This is the <b>Camp 3: Follow the line</b> example.</li>
+  <li><b>Why 50 and −50?</b> At steering 50 one wheel stops and the other drives, so the robot still moves forward while it turns.
+    With 100 and −100 it spins on the spot and wobbles without getting anywhere. Try it!</li>
+  <li><b>Race.</b> Make it faster: change the movement speed. At 30 % the robot holds the line. Somewhere around 40 % it starts to lose it on the curves.
+    Can you make it fast <i>and</i> safe, for example with smaller steering like 30 and −30?</li>
+</ol>
+<h4>How the line follower works</h4>
+<ul>
+  <li>The robot really follows the <b>edge</b> of the line: on black it turns one way, on white the other, so it zig-zags along the border.</li>
+  <li>That's why it goes around the loop in one direction only. Turn it around and it follows the other edge.</li>
+  <li>Using <i>if … else</i> means every pass of the loop makes exactly one decision. That's simpler and quicker than two separate <i>if</i> blocks.</li>
+</ul>
+<h4>Try this</h4>
+<ul>
+  <li>Load the <b>Camp 3: Line ideas</b> mat and run your follower. What happens at the right angle, the T-junction, the gap and the red line?</li>
+  <li>Stop at the red line: add a check for <i>B is color red</i>.</li>
+  <li>Change the 50 % threshold to 30 % or 70 %. What changes, and why?</li>
+  <li>Count the lines you cross on the <b>Color stripes</b> mat with a variable.</li>
+</ul>
+<details><summary>The same programs in Python</summary>
+<pre>from hub import port
+import motor_pair, color_sensor, runloop
+
+async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+
+    # 1. stop at the line
+    motor_pair.move(motor_pair.PAIR_1, 0, velocity=333)
+    while color_sensor.reflection(port.B) >= 50:
+        await runloop.sleep_ms(10)
+    motor_pair.stop(motor_pair.PAIR_1)
+
+    # 2. follow the line (use this part on the Follow the line mat)
+    # while True:
+    #     if color_sensor.reflection(port.B) < 50:
+    #         motor_pair.move(motor_pair.PAIR_1, 50, velocity=333)
+    #     else:
+    #         motor_pair.move(motor_pair.PAIR_1, -50, velocity=333)
+    #     await runloop.sleep_ms(10)
+
+runloop.run(main())</pre>
+</details>`;
+
+const CAMP3_ROBOT = {
+  A: {}, B: { type: "color" }, C: { type: "motor", model: "medium", role: "left" },
+  D: { type: "motor", model: "medium", role: "right" }, E: {}, F: {},
+};
+
 const CAMP2_ROBOT = {
   A: {}, B: {}, C: { type: "motor", model: "medium", role: "left" }, D: { type: "motor", model: "medium", role: "right" },
   E: { type: "motor", model: "medium", role: "arm" }, F: { type: "distance" },
@@ -233,6 +317,12 @@ const CAMP_ROBOT = {
 };
 
 const EXAMPLES = {
+  camp3stop: { mat: "camp3stop", make: () => camp3Program("Camp 3: Stop at the line", false), config: CAMP3_ROBOT, guide: CAMP3_GUIDE,
+    hint: "Learning camp 3: drive forward and stop on the black line using reflected light." },
+  camp3follow: { mat: "camp3follow", make: () => camp3Program("Camp 3: Follow the line", true), config: CAMP3_ROBOT, guide: CAMP3_GUIDE,
+    hint: "Learning camp 3: follow the black loop. Can you make it faster without losing the line?" },
+  camp3ideas: { mat: "camp3ideas", make: () => camp3Program("Camp 3: Line ideas", true), config: CAMP3_ROBOT, guide: CAMP3_GUIDE,
+    hint: "Learning camp 3: the same line follower on a harder track. Watch what happens at each special spot." },
   camp2: { mat: "camp2", make: () => camp2Program("Camp 2: Stop and grab", false), config: CAMP2_ROBOT, guide: CAMP2_GUIDE,
     hint: "Learning camp 2: stop at the marker with the distance sensor, grab the cube with the arm, and bring it HOME." },
   relay: { mat: "relay", make: () => camp2Program("Camp 2: Relay race", true), config: CAMP2_ROBOT, guide: CAMP2_GUIDE,

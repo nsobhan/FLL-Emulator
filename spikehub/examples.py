@@ -1,6 +1,24 @@
 """Sample SPIKE App 3 Python programs for trying the simulator without the app."""
 
 EXAMPLES = {
+    "camp3": {
+        "name": "Camp 3: Follow the line", "mat": "camp3follow",
+        "source": '''from hub import port
+import motor_pair, color_sensor, runloop
+
+async def main():
+    # Driving Base: drive C (left) + D (right), color sensor on B
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+    while True:
+        if color_sensor.reflection(port.B) < 50:        # on black: turn one way
+            motor_pair.move(motor_pair.PAIR_1, 50, velocity=333)
+        else:                                            # on white: turn the other way
+            motor_pair.move(motor_pair.PAIR_1, -50, velocity=333)
+        await runloop.sleep_ms(10)
+
+runloop.run(main())
+''',
+    },
     "relay": {
         "name": "Camp 2: Relay race", "mat": "relay",
         "source": '''from hub import port

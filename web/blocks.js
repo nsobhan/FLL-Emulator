@@ -1,6 +1,6 @@
 // SPIKE App 3 project files (.llsp3) and a Word Blocks interpreter.
 // Browser port of spikehub/blocks.py. Needs the JSZip global.
-import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js?v=3";
+import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js?v=4";
 
 const WHEEL_CIRCUMFERENCE_CM = Math.PI * WHEEL_DIAMETER;
 export const COLOR_NAMES = { "-1": "no color", 0: "black", 1: "magenta", 2: "purple", 3: "blue", 4: "azure",
