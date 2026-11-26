@@ -14,9 +14,10 @@ const runner = new BlockRunner(world, {
   onSound: snd => { if (audio && snd) new Audio(snd.url).play().catch(() => {}); },
 });
 
-// ------------------------------------------------------------------ example project (built in)
-function exampleProject() {
-  const p = new Project("Example: Color stripes");
+// ------------------------------------------------------------------ example projects (built in)
+// Small helper for writing Word Block projects in code, in the same shape as a .llsp3 file.
+function builder(name) {
+  const p = new Project(name);
   p.type = "word-blocks";
   let n = 0;
   const B = p.blocks;
@@ -24,6 +25,12 @@ function exampleProject() {
   const menu = (op, value) => add(op, { shadow: true, fields: { ["field_" + op]: [value, null] } });
   const lit = v => [1, [4, String(v)]];
   const chain = ids => { for (let i = 0; i < ids.length - 1; i++) { B[ids[i]].next = ids[i + 1]; B[ids[i + 1]].parent = ids[i]; } return ids[0]; };
+  const dir = d => [1, menu("flippermove_custom-icon-direction", d)];
+  return { p, add, menu, lit, chain, dir };
+}
+
+function colorExample() {
+  const { p, add, menu, lit, chain, dir } = builder("Example: Color stripes");
   const isColor = c => add("flippersensors_isColor", { inputs: { PORT: [1, menu("flippersensors_color-sensor-selector", "C")], VALUE: [1, menu("flippersensors_color-selector", String(c))] } });
   const heart = "0909099999999990999000900";
   chain([
@@ -31,24 +38,64 @@ function exampleProject() {
     add("flippermove_setMovementPair", { inputs: { PAIR: [1, menu("flippermove_movement-port-selector", "AB")] } }),
     add("flippermove_movementSpeed", { inputs: { SPEED: lit(30) } }),
     add("flipperlight_lightDisplayText", { inputs: { TEXT: [1, [10, "Go"]] } }),
-    add("flippermove_startMove", { inputs: { DIRECTION: [1, menu("flippermove_custom-icon-direction", "forward")] } }),
+    add("flippermove_startMove", { inputs: { DIRECTION: dir("forward") } }),
     add("control_wait_until", { inputs: { CONDITION: [2, isColor(9)] } }),
     add("flippermove_stopMove"),
     add("flipperlight_lightDisplayImageOn", { inputs: { MATRIX: [1, menu("flipperlight_matrix-5x5-brightness-image", heart)] } }),
     add("flippersound_beepForTime", { inputs: { NOTE: lit(72), DURATION: lit(0.3) } }),
-    add("flippermove_move", { inputs: { DIRECTION: [1, menu("flippermove_custom-icon-direction", "back")], VALUE: lit(10) }, fields: { UNIT: ["cm", null] } }),
+    add("flippermove_move", { inputs: { DIRECTION: dir("back"), VALUE: lit(10) }, fields: { UNIT: ["cm", null] } }),
   ]);
-  for (const [i, c] of [[6, 6], [7, 7]].entries()) {
+  for (const [i, c] of [6, 7].entries()) {
     chain([
-      add("flipperevents_whenColor", { top: true, y: 100 + i, inputs: { PORT: [1, menu("flippersensors_color-sensor-selector", "C")], OPTION: [1, menu("flippersensors_color-selector", String(c[1]))] } }),
-      add("flipperlight_centerButtonLight", { inputs: { COLOR: [1, menu("flipperlight_color-selector-vertical", String(c[1]))] } }),
+      add("flipperevents_whenColor", { top: true, y: 100 + i, inputs: { PORT: [1, menu("flippersensors_color-sensor-selector", "C")], OPTION: [1, menu("flippersensors_color-selector", String(c))] } }),
+      add("flipperlight_centerButtonLight", { inputs: { COLOR: [1, menu("flipperlight_color-selector-vertical", String(c))] } }),
     ]);
   }
   return p;
 }
 
+// Drives around the Playground: go forward until the distance sensor sees a wall or mat edge
+// closer than 15 cm, then turn right and carry on. The hub light shows when a wall is near.
+function distanceExample() {
+  const { p, add, menu, lit, chain, dir } = builder("Example: Distance sensor");
+  const distPort = () => [1, menu("flippersensors_distance-sensor-selector", "D")];
+  const isCloser = cm => add("flippersensors_isDistance", { inputs: { PORT: distPort(), VALUE: lit(cm) }, fields: { COMPARATOR: ["<", null], UNIT: ["cm", null] } });
+  const loopBody = chain([
+    add("flippermove_startMove", { inputs: { DIRECTION: dir("forward") } }),
+    add("control_wait_until", { inputs: { CONDITION: [2, isCloser(15)] } }),
+    add("flippermove_stopMove"),
+    add("flippersound_beepForTime", { inputs: { NOTE: lit(67), DURATION: lit(0.2) } }),
+    add("flippermove_move", { inputs: { DIRECTION: dir("clockwise"), VALUE: lit(0.5) }, fields: { UNIT: ["rotations", null] } }),
+  ]);
+  chain([
+    add("flipperevents_whenProgramStarts", { top: true, y: 0 }),
+    add("flippermove_setMovementPair", { inputs: { PAIR: [1, menu("flippermove_movement-port-selector", "AB")] } }),
+    add("flippermove_movementSpeed", { inputs: { SPEED: lit(40) } }),
+    add("control_forever", { inputs: { SUBSTACK: [2, loopBody] } }),
+  ]);
+  const when = (comparator, color, y) => chain([
+    add("flipperevents_whenDistance", { top: true, y, inputs: { PORT: distPort(), VALUE: lit(20) }, fields: { COMPARATOR: [comparator, null], UNIT: ["cm", null] } }),
+    add("flipperlight_centerButtonLight", { inputs: { COLOR: [1, menu("flipperlight_color-selector-vertical", String(color))] } }),
+  ]);
+  when("<", 9, 100);   // red when a wall is closer than 20 cm
+  when(">", 6, 101);   // green again when it is farther than 20 cm
+  return p;
+}
+
+const EXAMPLES = {
+  colors: { mat: "colors", make: colorExample,
+    hint: "Example: drives across the stripes, lights the hub green and yellow, and stops on red. Drag the robot onto colors to try the sensor." },
+  distance: { mat: "playground", make: distanceExample,
+    hint: "Example: drives forward until the distance sensor (port D) sees a wall or mat edge closer than 15 cm, then turns right. The hub light goes red near walls. Watch the dashed line and port D." },
+};
+function loadExample(key) {
+  const ex = EXAMPLES[key];
+  setMat(ex.mat);
+  showProject(ex.make(), null, ex.hint);
+}
+
 // ------------------------------------------------------------------ project bar
-function showProject(p, label) {
+function showProject(p, label, hint) {
   runner.stop();
   project = p;
   $("#projName").textContent = label || p.name;
@@ -61,7 +108,7 @@ function showProject(p, label) {
     $("#projHint").textContent = "This is a Python project. Python runs in the Mac version (see the link below); here you can read the code.";
     return;
   }
-  $("#projHint").textContent = "Press Run project, then watch the robot and the blocks. Drag the robot onto colors to try your sensors.";
+  $("#projHint").textContent = hint || "Press Run project, then watch the robot and the blocks. Drag the robot onto colors or near walls to try your sensors.";
   const scripts = p.scripts();
   if (!scripts.length) { box.innerHTML = '<p class="hint">This project has no blocks under a "when" block yet.</p>'; return; }
   for (const sc of scripts) { const d = document.createElement("div"); d.className = "script"; renderSeq(sc, d); box.appendChild(d); }
@@ -81,7 +128,7 @@ const drop = $("#drop");
 ["dragenter", "dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t === "drop" || e.target === document.documentElement) drop.classList.remove("over"); }));
 document.addEventListener("drop", e => { drop.classList.remove("over"); const f = e.dataTransfer?.files[0]; if (f) openFile(f); });
-$("#exampleBtn").onclick = () => { setMat("colors"); showProject(exampleProject()); };
+$("#exampleSel").onchange = e => { if (e.target.value) loadExample(e.target.value); e.target.value = ""; };
 $("#runBtn").onclick = () => {
   if (!project || project.type === "python") return;
   $("#feed").textContent = ""; world.trail = [[world.x, world.y]];
@@ -326,7 +373,6 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-setMat("colors");
-showProject(exampleProject());
+loadExample("colors");
 buildPorts();
 requestAnimationFrame(frame);

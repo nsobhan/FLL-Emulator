@@ -148,7 +148,11 @@ footer { padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, en
     </div>
     <label class="btn" for="projIn">Choose .llsp3 file</label>
     <input type="file" id="projIn" accept=".llsp3" hidden>
-    <button class="btn" id="exampleBtn">Load the example</button>
+    <select id="exampleSel" aria-label="Load an example project">
+      <option value="">Load an example…</option>
+      <option value="colors">Color sensor: stripes</option>
+      <option value="distance">Distance sensor: avoid walls</option>
+    </select>
     <button class="btn primary" id="runBtn">Run project</button>
   </section>
 
