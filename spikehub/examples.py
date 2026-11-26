@@ -1,6 +1,24 @@
 """Sample SPIKE App 3 Python programs for trying the simulator without the app."""
 
 EXAMPLES = {
+    "camp1": {
+        "name": "Camp 1: Drive a square", "mat": "camp1",
+        "source": '''from hub import port
+import motor_pair, runloop
+
+async def main():
+    # Practice Driving Base: drive motors on C (left) and D (right)
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+    for side in range(4):
+        # 40 cm = 40 / 17.6 x 360 = about 819 wheel degrees
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, 819, 0, velocity=555)
+        # turn left 90 degrees: steering -100 for half a rotation
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, 180, -100, velocity=555)
+        print("side", side + 1, "done")
+
+runloop.run(main())
+''',
+    },
     "square": {
         "name": "Drive a square", "mat": "playground",
         "source": '''from hub import port, light_matrix, sound

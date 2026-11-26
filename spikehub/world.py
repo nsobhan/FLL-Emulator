@@ -98,6 +98,17 @@ MATS = {
             {"kind": "rect", "color": "red", "x": 78, "y": 13, "w": 8, "h": 14},
         ],
     },
+    "camp1": {
+        "name": "Camp 1: Drive a square", "w": 160, "h": 100,
+        "start": {"x": 50, "y": 25, "heading": 0},
+        "hint": "Follow the path: 40 cm sides, turning left at each corner, and finish back on the start circle.",
+        # "guide" and "label" shapes are only drawn: sensors don't see them
+        "shapes": [
+            {"kind": "guide", "points": [[50, 25], [90, 25], [90, 65], [50, 65], [50, 31]], "arrow": True},
+            {"kind": "label", "x": 50, "y": 13, "text": "START"},
+            {"kind": "label", "x": 70, "y": 45, "text": "40 cm × 40 cm"},
+        ],
+    },
     "maze": {
         "name": "Maze", "w": 160, "h": 120,
         "start": {"x": 20, "y": 18, "heading": 90},
@@ -155,6 +166,7 @@ class Motor:
         self.accel = 1000.0
         self.decel = 1000.0
         self.duty = None        # set_duty_cycle value, -10000..10000
+        self.moved = 0.0        # degrees turned during the last step
         self.stalled = False
 
     @property
@@ -189,14 +201,17 @@ class Motor:
         dv = tv - self.vel
         self.vel += max(-rate * dt, min(rate * dt, dv))
         move = self.vel * dt
+        before = self.pos
         if kind == "deg":
             _, v, start, target, stop = self.cmd
             done_sofar = abs(self.pos - start)
             if done_sofar + abs(move) >= abs(target):
                 self.pos = start + math.copysign(abs(target), target)
+                self.moved = self.pos - before   # the robot moves exactly as far as the wheel turned
                 self._finish(stop)
                 return
         self.pos += move
+        self.moved = move
         if kind == "time" and now >= self.cmd[2]:
             self._finish(self.cmd[3])
 
@@ -368,8 +383,9 @@ class World:
             m.step(dt, now)
         left, right = self.drive_ports()
         k = math.pi * WHEEL_DIAMETER / 360.0  # cm per wheel degree
-        vl = -self.motors[left].vel * k if left in self.motors else 0.0  # left motor is mirrored
-        vr = self.motors[right].vel * k if right in self.motors else 0.0
+        # wheel speeds from how far each motor actually turned this step (left motor is mirrored)
+        vl = -self.motors[left].moved / dt * k if left in self.motors else 0.0
+        vr = self.motors[right].moved / dt * k if right in self.motors else 0.0
         v = (vl + vr) / 2
         omega = math.degrees((vr - vl) / AXLE_TRACK)
         nh = self.heading + omega * dt

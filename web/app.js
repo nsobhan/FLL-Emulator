@@ -1,5 +1,5 @@
-import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js";
-import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js";
+import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js?v=2";
+import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js?v=2";
 
 const $ = s => document.querySelector(s);
 const COLORS = { black: "#1d1f21", red: "#e0312b", green: "#1aa64a", blue: "#1f6fe0", yellow: "#ffd21a", magenta: "#d03ca8",
@@ -82,7 +82,76 @@ function distanceExample() {
   return p;
 }
 
+// Learning camp 1 (Competition-Ready "Training Camp 1: Driving Around"): drive in a square.
+// Practice Driving Base: drive motors on C (left) and D (right), no sensors.
+function camp1Example() {
+  const { p, add, menu, lit, chain, dir } = builder("Camp 1: Drive a square");
+  const side = chain([
+    add("flippermove_move", { inputs: { DIRECTION: dir("forward"), VALUE: lit(40) }, fields: { UNIT: ["cm", null] } }),
+    add("flippermove_steer", { inputs: { STEERING: [1, menu("flippermove_rotation-wheel", "-100")], VALUE: lit(0.5) }, fields: { UNIT: ["rotations", null] } }),
+  ]);
+  chain([
+    add("flipperevents_whenProgramStarts", { top: true }),
+    add("flippermove_setMovementPair", { inputs: { PAIR: [1, menu("flippermove_movement-port-selector", "CD")] } }),
+    add("flippermove_movementSpeed", { inputs: { SPEED: lit(50) } }),
+    add("control_repeat", { inputs: { TIMES: [1, [6, "4"]], SUBSTACK: [2, side] } }),
+  ]);
+  return p;
+}
+
+const CAMP1_GUIDE = `
+<h3>Camp 1 · Driving around</h3>
+<p><b>Goal:</b> make your Driving Base move in a square and finish where it started.</p>
+<p><b>Robot:</b> the Practice Driving Base with no sensors. The drive motors are on <b>C (left)</b> and <b>D (right)</b>.
+If your robot uses other ports, change the "set movement motors" block.</p>
+<h4>Steps</h4>
+<ol>
+  <li><b>One side.</b> Use <i>move ↑ forward for 40 cm</i>. Run it, then measure how far the robot went.</li>
+  <li><b>One corner.</b> Use <i>move steering −100 for 0.5 rotations</i>. Steering −100 spins the robot on the spot to the left.
+    Change 0.5 until the turn is exactly a quarter turn (90°).</li>
+  <li><b>Find the pattern.</b> A square is "drive a side, turn a corner", four times.
+    Put those two blocks inside <i>repeat 4</i>.</li>
+  <li><b>Run the program.</b> The robot should trace the path and stop back on the START circle, facing the way it started.</li>
+</ol>
+<h4>Why these numbers?</h4>
+<ul>
+  <li>The wheels are 5.6 cm across, so one wheel rotation drives π × 5.6 ≈ <b>17.6 cm</b>. 40 cm is about 2.3 rotations.</li>
+  <li>When the robot spins on the spot, each wheel drives around a circle as wide as the gap between the wheels (11.2 cm).
+    A quarter of that circle is π × 11.2 ÷ 4 ≈ 8.8 cm, which is <b>0.5 rotations</b>.</li>
+  <li>A real robot's wheels slip a little and its wheel gap may differ, so you may need 0.48 or 0.52. Testing and adjusting is the real skill.</li>
+</ul>
+<h4>Try this</h4>
+<ul>
+  <li>Make a bigger square with 60 cm sides. Does it still fit on the mat?</li>
+  <li>Change steering to <b>100</b>. Which way does the square go now?</li>
+  <li>Make a triangle: repeat 3 and turn 120° (about 0.67 rotations).</li>
+  <li>Make it faster with movement speed 80 %. Is it still accurate?</li>
+  <li>Expert: turn using the yaw angle instead of rotations: <i>set yaw angle to 0</i>, <i>start moving steering −100</i>,
+    <i>wait until yaw angle &lt; −90</i>, <i>stop moving</i>.</li>
+</ul>
+<details><summary>The same program in Python</summary>
+<pre>from hub import port
+import motor_pair, runloop
+
+async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+    for side in range(4):
+        # 40 cm = 40 / 17.6 × 360 ≈ 819 wheel degrees
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, 819, 0, velocity=555)
+        # turn left 90°: steering -100 for half a rotation
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, 180, -100, velocity=555)
+
+runloop.run(main())</pre>
+</details>`;
+
+const CAMP_ROBOT = {
+  A: {}, B: {}, C: { type: "motor", model: "medium", role: "left" }, D: { type: "motor", model: "medium", role: "right" },
+  E: {}, F: {},
+};
+
 const EXAMPLES = {
+  camp1: { mat: "camp1", make: camp1Example, config: CAMP_ROBOT, guide: CAMP1_GUIDE,
+    hint: "Learning camp 1: make the Driving Base move in a square. Press Run project, then read the camp guide below the program." },
   colors: { mat: "colors", make: colorExample,
     hint: "Example: drives across the stripes, lights the hub green and yellow, and stops on red. Drag the robot onto colors to try the sensor." },
   distance: { mat: "playground", make: distanceExample,
@@ -91,7 +160,13 @@ const EXAMPLES = {
 function loadExample(key) {
   const ex = EXAMPLES[key];
   setMat(ex.mat);
+  world.applyConfig(structuredClone(ex.config || defaultConfig()));
   showProject(ex.make(), null, ex.hint);
+  showGuide(ex.guide);
+}
+function showGuide(html) {
+  $("#guideCard").hidden = !html;
+  $("#guide").innerHTML = html || "";
 }
 
 // ------------------------------------------------------------------ project bar
@@ -117,6 +192,7 @@ async function openFile(file) {
   try {
     const p = await readProject(file);
     showProject(p);
+    showGuide(null);
     world.resetRobot();
   } catch (e) {
     $("#projErr").textContent = e instanceof ProjectError ? e.message : `Couldn't open that file (${e.message}).`;
@@ -220,6 +296,11 @@ function draw() {
       ctx.strokeStyle = COLORS[s.color]; ctx.lineWidth = s.width * scale; ctx.lineCap = ctx.lineJoin = "round";
       ctx.beginPath(); s.points.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
     } else if (s.kind === "wall") { ctx.fillStyle = css("--wall"); ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale); }
+    else if (s.kind === "guide") drawGuide(s);
+    else if (s.kind === "label") {
+      ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(11, 2.6 * scale)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.text, X(s.x), Y(s.y));
+    }
   }
   const st = mat.start; ctx.strokeStyle = "#9aa1a6"; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(X(st.x), Y(st.y), 9 * scale, 0, 7); ctx.stroke(); ctx.setLineDash([]);
@@ -229,6 +310,22 @@ function draw() {
   }
   drawRobot();
 }
+// A path for the robot to follow (drawn only; sensors don't see it), with an arrowhead at the end.
+function drawGuide(s) {
+  const pts = s.points;
+  ctx.strokeStyle = "#2a2f35"; ctx.lineWidth = Math.max(2, 0.6 * scale); ctx.lineCap = ctx.lineJoin = "square";
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
+  if (s.arrow && pts.length > 1) {
+    const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
+    const a = Math.atan2(-(y2 - y1), x2 - x1), L = 3 * scale;
+    ctx.beginPath();
+    ctx.moveTo(X(x2) - L * Math.cos(a - 0.6), Y(y2) - L * Math.sin(a - 0.6));
+    ctx.lineTo(X(x2), Y(y2));
+    ctx.lineTo(X(x2) - L * Math.cos(a + 0.6), Y(y2) - L * Math.sin(a + 0.6));
+    ctx.lineCap = "round"; ctx.stroke();
+  }
+}
+
 function drawRobot() {
   const a = world.heading * Math.PI / 180;
   if (portOf("distance")) {
@@ -373,6 +470,6 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-loadExample("colors");
+loadExample("camp1");
 buildPorts();
 requestAnimationFrame(frame);

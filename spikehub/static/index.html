@@ -436,6 +436,19 @@ function drawMat(st) {
       ctx.beginPath(); s.points.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
     } else if (s.kind === "wall") {
       ctx.fillStyle = css.getPropertyValue("--wall"); ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+    } else if (s.kind === "guide") {
+      const pts = s.points;
+      ctx.strokeStyle = "#2a2f35"; ctx.lineWidth = Math.max(2, 0.6 * scale); ctx.lineCap = ctx.lineJoin = "square";
+      ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
+      if (s.arrow) {
+        const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
+        const a = Math.atan2(-(y2 - y1), x2 - x1), L = 3 * scale;
+        ctx.beginPath(); ctx.moveTo(X(x2) - L * Math.cos(a - 0.6), Y(y2) - L * Math.sin(a - 0.6));
+        ctx.lineTo(X(x2), Y(y2)); ctx.lineTo(X(x2) - L * Math.cos(a + 0.6), Y(y2) - L * Math.sin(a + 0.6)); ctx.stroke();
+      }
+    } else if (s.kind === "label") {
+      ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(11, 2.6 * scale)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.text, X(s.x), Y(s.y));
     }
   }
   // start marker

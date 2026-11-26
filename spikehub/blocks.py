@@ -232,8 +232,8 @@ TEXT = {
     # movement
     "flippermove_move": "move {DIRECTION} for {VALUE} {@UNIT}",
     "flippermove_startMove": "start moving {DIRECTION}",
-    "flippermove_steer": "move {STEERING} for {VALUE} {@UNIT}",
-    "flippermove_startSteer": "start moving {STEERING}",
+    "flippermove_steer": "move steering {STEERING} for {VALUE} {@UNIT}",
+    "flippermove_startSteer": "start moving steering {STEERING}",
     "flippermove_stopMove": "stop moving",
     "flippermove_movementSpeed": "set movement speed to {SPEED} %",
     "flippermove_setMovementPair": "set movement motors to {PAIR}",

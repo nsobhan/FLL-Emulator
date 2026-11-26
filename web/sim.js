@@ -80,6 +80,16 @@ export const MATS = {
       { kind: "wall", x: 120, y: 0, w: 5, h: 80 },
     ],
   },
+  camp1: {
+    name: "Camp 1: Drive a square", w: 160, h: 100, start: { x: 50, y: 25, heading: 0 },
+    hint: "Follow the path: 40 cm sides, turning left at each corner, and finish back on the start circle.",
+    // "guide" shapes are only drawn: sensors don't see them
+    shapes: [
+      { kind: "guide", points: [[50, 25], [90, 25], [90, 65], [50, 65], [50, 31]], arrow: true },
+      { kind: "label", x: 50, y: 13, text: "START" },
+      { kind: "label", x: 70, y: 45, text: "40 cm × 40 cm" },
+    ],
+  },
   colors: {
     name: "Color stripes", w: 200, h: 120, start: { x: 20, y: 60, heading: 0 },
     hint: "A row of colored stripes to drive across: good for 'if color is …' programs.",
@@ -112,7 +122,7 @@ function rayRect(ox, oy, dx, dy, r) {
 export class Motor {
   constructor(model = "medium") {
     this.model = model; this.pos = 0; this.offset = 0; this.vel = 0;
-    this.cmd = ["stop", BRAKE]; this.accel = 1000; this.decel = 1000;
+    this.cmd = ["stop", BRAKE]; this.accel = 1000; this.decel = 1000; this.moved = 0;
   }
   get vmax() { return MOTOR_MAX[this.model] || 1110; }
   targetVelocity(t) {
@@ -129,16 +139,18 @@ export class Motor {
     if (k === "stop") rate = (this.cmd[1] === COAST || this.cmd[1] === SMART_COAST) ? 2500 : 20000;
     else rate = Math.abs(tv) > Math.abs(this.vel) ? this.accel : this.decel;
     this.vel += Math.max(-rate * dt, Math.min(rate * dt, tv - this.vel));
-    const move = this.vel * dt;
+    const move = this.vel * dt, before = this.pos;
     if (k === "deg") {
       const [, , start, target, stop] = this.cmd;
       if (Math.abs(this.pos - start) + Math.abs(move) >= Math.abs(target)) {
         this.pos = start + Math.sign(target) * Math.abs(target);
+        this.moved = this.pos - before;   // the robot moves exactly as far as the wheel turned
         this.finish(stop);
         return;
       }
     }
     this.pos += move;
+    this.moved = move;
     if (k === "time" && t >= this.cmd[2]) this.finish(this.cmd[3]);
   }
   finish(stop) {
@@ -229,8 +241,9 @@ export class World {
     for (const m of Object.values(this.motors)) m.step(dt, t);
     const [left, right] = this.driveports();
     const k = Math.PI * WHEEL_DIAMETER / 360;
-    const vl = this.motors[left] ? -this.motors[left].vel * k : 0;   // left motor is mirrored
-    const vr = this.motors[right] ? this.motors[right].vel * k : 0;
+    // wheel speeds from how far each motor actually turned this step (left motor is mirrored)
+    const vl = this.motors[left] ? -this.motors[left].moved / dt * k : 0;
+    const vr = this.motors[right] ? this.motors[right].moved / dt * k : 0;
     const v = (vl + vr) / 2, omega = (vr - vl) / AXLE_TRACK * 180 / Math.PI;
     const nh = this.heading + omega * dt, rad = nh * Math.PI / 180;
     const nx = this.x + v * Math.cos(rad) * dt, ny = this.y + v * Math.sin(rad) * dt;

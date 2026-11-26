@@ -1,6 +1,6 @@
 // SPIKE App 3 project files (.llsp3) and a Word Blocks interpreter.
 // Browser port of spikehub/blocks.py. Needs the JSZip global.
-import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js";
+import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js?v=2";
 
 const WHEEL_CIRCUMFERENCE_CM = Math.PI * WHEEL_DIAMETER;
 export const COLOR_NAMES = { "-1": "no color", 0: "black", 1: "magenta", 2: "purple", 3: "blue", 4: "azure",
@@ -144,7 +144,7 @@ const TEXT = {
   flipperevents_whenTimer: "when timer > {VALUE}", event_whenbroadcastreceived: "when I receive {@BROADCAST_OPTION}",
   event_broadcast: "broadcast {BROADCAST_INPUT}", event_broadcastandwait: "broadcast {BROADCAST_INPUT} and wait",
   flippermove_move: "move {DIRECTION} for {VALUE} {@UNIT}", flippermove_startMove: "start moving {DIRECTION}",
-  flippermove_steer: "move {STEERING} for {VALUE} {@UNIT}", flippermove_startSteer: "start moving {STEERING}",
+  flippermove_steer: "move steering {STEERING} for {VALUE} {@UNIT}", flippermove_startSteer: "start moving steering {STEERING}",
   flippermove_stopMove: "stop moving", flippermove_movementSpeed: "set movement speed to {SPEED} %",
   flippermove_setMovementPair: "set movement motors to {PAIR}", flippermove_setDistance: "set 1 motor rotation to {DISTANCE} {@UNIT}",
   flippermoremove_startDualSpeed: "start moving with {LEFT} % and {RIGHT} % speed",
