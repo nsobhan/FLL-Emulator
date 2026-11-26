@@ -6,6 +6,10 @@ export const WHEEL_DIAMETER = 5.6;
 const AXLE_TRACK = 11.2;
 const ROBOT_RADIUS = 9.0;
 const SENSOR_OFFSET = { color: [8, 0], distance: [10, 0], force: [11, 0] };
+// Grabber arm: the motor with role "arm". Turning it ARM_DOWN_DEG or more from where it started
+// lowers it; a cube in ARM_ZONE (robot frame: cm ahead, cm to the side) is then carried.
+export const ARM_DOWN_DEG = 45;
+const ARM_ZONE = { from: 7, to: 17, side: 6 };
 export const MOTOR_MAX = { medium: 1110, large: 1050, small: 660 };
 export const COAST = 0, BRAKE = 1, HOLD = 2, CONTINUE = 3, SMART_COAST = 4, SMART_BRAKE = 5;
 
@@ -90,6 +94,27 @@ export const MATS = {
       { kind: "label", x: 70, y: 45, text: "40 cm × 40 cm" },
     ],
   },
+  camp2: {
+    name: "Camp 2: Stop and grab", w: 160, h: 100, start: { x: 30, y: 50, heading: 0 },
+    hint: "The marker is 30 cm in front of the distance sensor. Stop at it, lower the arm to grab the cube, and back away.",
+    shapes: [
+      { kind: "zone", x: 12, y: 38, w: 36, h: 24, color: "#fff1b8", label: "HOME", home: true },
+      { kind: "marker", x: 70, y: 46, w: 6, h: 8, label: "MARKER" },
+      { kind: "label", x: 55, y: 64, text: "30 cm" },
+    ],
+    cubes: [{ x: 65, y: 50, size: 5, color: "#e0312b", name: "Cube" }],
+  },
+  relay: {
+    name: "Camp 2: Relay race", w: 160, h: 100, start: { x: 30, y: 50, heading: 0 },
+    hint: "Four batons wait at the marker. Bring them home one at a time.",
+    shapes: [
+      { kind: "zone", x: 12, y: 38, w: 36, h: 24, color: "#fff1b8", label: "HOME", home: true },
+      { kind: "marker", x: 70, y: 46, w: 6, h: 8, label: "MARKER" },
+      { kind: "label", x: 55, y: 64, text: "30 cm" },
+    ],
+    cubes: [["#e0312b", "Red baton"], ["#1f6fe0", "Blue baton"], ["#ffd21a", "Yellow baton"], ["#1aa64a", "Green baton"]]
+      .map(([color, name], i) => ({ x: 63 + (i % 2) * 2.6, y: 48.7 + Math.floor(i / 2) * 2.6, size: 2.4, color, name })),
+  },
   colors: {
     name: "Color stripes", w: 200, h: 120, start: { x: 20, y: 60, heading: 0 },
     hint: "A row of colored stripes to drive across: good for 'if color is …' programs.",
@@ -169,19 +194,57 @@ export class World {
     this.pixels = new Array(25).fill(0); this.scroll = null; this.powerLight = "white";
     this.buttons = { left: false, right: false }; this.buttonSince = { left: 0, right: 0 };
     this.forceManual = false; this.yawOffset = 0; this.trail = []; this.events = [];
-    this.configVersion = 0;
+    this.configVersion = 0; this.cubes = []; this.carried = null; this.armRef = 0;
     this.setMat(mat); this.applyConfig(this.config);
   }
   setMat(key) {
     this.matKey = MATS[key] ? key : "playground";
     this.mat = MATS[this.matKey];
-    this.walls = this.mat.shapes.filter(s => s.kind === "wall").concat(border(this.mat.w, this.mat.h));
+    // markers are solid objects: the robot bumps into them and the distance sensor sees them
+    this.walls = this.mat.shapes.filter(s => s.kind === "wall" || s.kind === "marker").concat(border(this.mat.w, this.mat.h));
     this.resetRobot();
   }
   resetRobot() {
     const s = this.mat.start;
     this.x = s.x; this.y = s.y; this.heading = s.heading; this.yawOffset = this.heading;
     this.trail = [[this.x, this.y]];
+    this.cubes = (this.mat.cubes || []).map(c => ({ ...c }));
+    this.carried = null;
+    this.armRef = this.armMotor()?.pos ?? 0;
+  }
+  armPort() { return Object.entries(this.config).find(([p, d]) => d.type === "motor" && d.role === "arm" && this.motors[p])?.[0]; }
+  armMotor() { const p = this.armPort(); return p ? this.motors[p] : null; }
+  armDown() { const m = this.armMotor(); return !!m && Math.abs(m.pos - this.armRef) >= ARM_DOWN_DEG; }
+  inZone(c, zone) { return zone && c.x >= zone.x && c.x <= zone.x + zone.w && c.y >= zone.y && c.y <= zone.y + zone.h; }
+  homeZone() { return this.mat.shapes.find(s => s.kind === "zone" && s.home); }
+  // pick up, carry and drop cubes with the arm
+  updateCubes() {
+    if (!this.cubes.length) return;
+    const r = this.heading * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r);
+    const down = this.armDown();
+    if (this.carried) {
+      const c = this.carried;
+      if (down) { c.x = this.x + c.ox * cos - c.oy * sin; c.y = this.y + c.ox * sin + c.oy * cos; return; }
+      this.carried = null;
+      if (this.inZone(c, this.homeZone())) {
+        const n = this.cubes.filter(k => this.inZone(k, this.homeZone())).length;
+        this.events.push({ type: "notice", text: `${c.name || "Cube"} delivered home (${n} of ${this.cubes.length})` });
+      }
+      return;
+    }
+    if (!down) return;
+    const home = this.homeZone();
+    let best = null;
+    for (const c of this.cubes) {
+      if (this.inZone(c, home) && this.mat.cubes?.length > 1) continue;   // relay: don't pick delivered batons up again
+      const dx = c.x - this.x, dy = c.y - this.y, ox = dx * cos + dy * sin, oy = -dx * sin + dy * cos;
+      if (ox >= ARM_ZONE.from && ox <= ARM_ZONE.to && Math.abs(oy) <= ARM_ZONE.side && (!best || ox < best.ox)) best = { c, ox, oy };
+    }
+    if (best) {
+      Object.assign(best.c, { ox: best.ox, oy: best.oy });
+      this.carried = best.c;
+      this.events.push({ type: "notice", text: `Grabbed the ${(best.c.name || "cube").toLowerCase()}` });
+    }
   }
   applyConfig(cfg) {
     this.config = cfg;
@@ -232,6 +295,7 @@ export class World {
     for (const m of Object.values(this.motors)) { m.cmd = ["stop", BRAKE]; m.vel = 0; m.accel = m.decel = 1000; }
     this.pairs = {}; this.pixels = new Array(25).fill(0); this.scroll = null; this.powerLight = "white";
     this.yawOffset = this.heading;
+    if (!this.carried) this.armRef = this.armMotor()?.pos ?? 0;   // the arm starts "up" where it is
   }
   programStop() {
     for (const m of Object.values(this.motors)) m.cmd = ["stop", COAST];
@@ -253,6 +317,7 @@ export class World {
       const [lx, ly] = this.trail[this.trail.length - 1];
       if (Math.hypot(nx - lx, ny - ly) > 0.8) { this.trail.push([nx, ny]); if (this.trail.length > 4000) this.trail.shift(); }
     }
+    this.updateCubes();
     if (this.scroll) {
       const s = this.scroll, i = Math.floor((t - s.t0) * 1000 / s.ms);
       if (i >= s.frames.length) { this.pixels = new Array(25).fill(0); this.scroll = null; }

@@ -1,6 +1,6 @@
 // SPIKE App 3 project files (.llsp3) and a Word Blocks interpreter.
 // Browser port of spikehub/blocks.py. Needs the JSZip global.
-import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js?v=2";
+import { Hub, PORTS, WHEEL_DIAMETER, BRAKE, now } from "./sim.js?v=3";
 
 const WHEEL_CIRCUMFERENCE_CM = Math.PI * WHEEL_DIAMETER;
 export const COLOR_NAMES = { "-1": "no color", 0: "black", 1: "magenta", 2: "purple", 3: "blue", 4: "azure",
@@ -217,10 +217,12 @@ export class BlockRunner {
     this.p = project; w.programReset();
     this.vars = Object.fromEntries(Object.entries(project.variables).map(([k, v]) => [k, v.value]));
     this.lists = Object.fromEntries(Object.entries(project.lists).map(([k, v]) => [k, [...v.value]]));
-    this.movePair = ["A", "B"]; this.moveSpeed = 50; this.motorSpeed = {}; this.rotationCm = WHEEL_CIRCUMFERENCE_CM;
+    // start with the robot's own drive motors (A+B on a robot that has none set)
+    const [dl, dr] = this.world.driveports();
+    this.movePair = dl && dr ? [dl, dr] : ["A", "B"]; this.moveSpeed = 50; this.motorSpeed = {}; this.rotationCm = WHEEL_CIRCUMFERENCE_CM;
     this.timer0 = now(); this.threads = []; this.hatPrev = {}; this.fed = {}; this.procs = this.findProcs();
     this.hatSet = this.p.hats;
-    try { this.hub.pair(...this.movePair); } catch { /* no motors */ }
+    if (this.movePair.every(l => this.world.deviceAt(l) === "motor")) this.hub.pair(...this.movePair);
     this.running = true; this.onState(true);
     for (const h of this.hatSet) if (this.p.blocks[h].opcode === "flipperevents_whenProgramStarts") this.spawn(h);
   }

@@ -30,6 +30,10 @@ WHEEL_DIAMETER = 5.6   # cm, the standard SPIKE Prime wheel
 AXLE_TRACK = 11.2      # cm between wheel centres
 ROBOT_RADIUS = 9.0     # cm, used for collisions
 SENSOR_OFFSET = {"color": (8.0, 0.0), "distance": (10.0, 0.0), "force": (11.0, 0.0)}
+# Grabber arm: the motor with role "arm". Turning it ARM_DOWN_DEG or more from where it started
+# lowers it; a cube in ARM_ZONE (robot frame: cm ahead, cm to the side) is then carried.
+ARM_DOWN_DEG = 45
+ARM_ZONE = (7.0, 17.0, 6.0)
 
 MOTOR_MAX = {"medium": 1110, "large": 1050, "small": 660}
 MOTOR_TYPE_ID = {"medium": 0x30, "large": 0x31, "small": 0x41}
@@ -108,6 +112,30 @@ MATS = {
             {"kind": "label", "x": 50, "y": 13, "text": "START"},
             {"kind": "label", "x": 70, "y": 45, "text": "40 cm × 40 cm"},
         ],
+    },
+    "camp2": {
+        "name": "Camp 2: Stop and grab", "w": 160, "h": 100,
+        "start": {"x": 30, "y": 50, "heading": 0},
+        "hint": "The marker is 30 cm in front of the distance sensor. Stop at it, lower the arm to grab the cube, and back away.",
+        "shapes": [
+            {"kind": "zone", "x": 12, "y": 38, "w": 36, "h": 24, "color": "#fff1b8", "label": "HOME", "home": True},
+            {"kind": "marker", "x": 70, "y": 46, "w": 6, "h": 8, "label": "MARKER"},
+            {"kind": "label", "x": 55, "y": 64, "text": "30 cm"},
+        ],
+        "cubes": [{"x": 65, "y": 50, "size": 5, "color": "#e0312b", "name": "Cube"}],
+    },
+    "relay": {
+        "name": "Camp 2: Relay race", "w": 160, "h": 100,
+        "start": {"x": 30, "y": 50, "heading": 0},
+        "hint": "Four batons wait at the marker. Bring them home one at a time.",
+        "shapes": [
+            {"kind": "zone", "x": 12, "y": 38, "w": 36, "h": 24, "color": "#fff1b8", "label": "HOME", "home": True},
+            {"kind": "marker", "x": 70, "y": 46, "w": 6, "h": 8, "label": "MARKER"},
+            {"kind": "label", "x": 55, "y": 64, "text": "30 cm"},
+        ],
+        "cubes": [{"x": 63 + (i % 2) * 2.6, "y": 48.7 + (i // 2) * 2.6, "size": 2.4, "color": c, "name": n}
+                  for i, (c, n) in enumerate([("#e0312b", "Red baton"), ("#1f6fe0", "Blue baton"),
+                                              ("#ffd21a", "Yellow baton"), ("#1aa64a", "Green baton")])],
     },
     "maze": {
         "name": "Maze", "w": 160, "h": 120,
@@ -252,6 +280,9 @@ class World:
         self.trail: list[tuple[float, float]] = []
         self.distance_pixels = [0, 0, 0, 0]
         self.config_version = 0
+        self.cubes: list[dict] = []
+        self.carried = None
+        self.arm_ref = 0.0
         self.set_mat(mat)
         self.apply_config(self.config)
         self._running = False
@@ -261,7 +292,8 @@ class World:
         with self.lock:
             self.mat_key = key if key in MATS else "playground"
             self.mat = MATS[self.mat_key]
-            self.walls = [s for s in self.mat["shapes"] if s["kind"] == "wall"] + \
+            # markers are solid objects: the robot bumps into them and the distance sensor sees them
+            self.walls = [s for s in self.mat["shapes"] if s["kind"] in ("wall", "marker")] + \
                 _border(self.mat["w"], self.mat["h"])
             self.reset_robot()
 
@@ -273,6 +305,59 @@ class World:
             self.heading = s["heading"] if heading is None else heading
             self.yaw_offset = self.heading
             self.trail = [(self.x, self.y)]
+            self.cubes = [dict(c) for c in self.mat.get("cubes", [])]
+            self.carried = None
+            m = self.arm_motor()
+            self.arm_ref = m.pos if m else 0.0
+
+    # -- grabber arm and cubes
+    def arm_port(self):
+        return next((p for p, d in self.config.items()
+                     if d.get("type") == "motor" and d.get("role") == "arm" and p in self.motors), None)
+
+    def arm_motor(self):
+        p = self.arm_port()
+        return self.motors.get(p) if p else None
+
+    def arm_down(self):
+        m = self.arm_motor()
+        return bool(m) and abs(m.pos - self.arm_ref) >= ARM_DOWN_DEG
+
+    def home_zone(self):
+        return next((s for s in self.mat["shapes"] if s["kind"] == "zone" and s.get("home")), None)
+
+    def _update_cubes(self):
+        if not self.cubes:
+            return
+        r = math.radians(self.heading)
+        cos, sin = math.cos(r), math.sin(r)
+        home = self.home_zone()
+        down = self.arm_down()
+        if self.carried is not None:
+            c = self.carried
+            if down:
+                c["x"] = self.x + c["ox"] * cos - c["oy"] * sin
+                c["y"] = self.y + c["ox"] * sin + c["oy"] * cos
+                return
+            self.carried = None
+            if home and _point_in_rect(c["x"], c["y"], home):
+                n = sum(1 for k in self.cubes if _point_in_rect(k["x"], k["y"], home))
+                self.events.append({"type": "notice", "text": f"{c.get('name', 'Cube')} delivered home ({n} of {len(self.cubes)})"})
+            return
+        if not down:
+            return
+        best = None
+        for c in self.cubes:
+            if home and len(self.mat.get("cubes", [])) > 1 and _point_in_rect(c["x"], c["y"], home):
+                continue   # relay: don't pick delivered batons up again
+            dx, dy = c["x"] - self.x, c["y"] - self.y
+            ox, oy = dx * cos + dy * sin, -dx * sin + dy * cos
+            if ARM_ZONE[0] <= ox <= ARM_ZONE[1] and abs(oy) <= ARM_ZONE[2] and (best is None or ox < best[1]):
+                best = (c, ox, oy)
+        if best:
+            c, c["ox"], c["oy"] = best
+            self.carried = c
+            self.events.append({"type": "notice", "text": f"Grabbed the {c.get('name', 'cube').lower()}"})
 
     def apply_config(self, cfg):
         with self.lock:
@@ -351,6 +436,9 @@ class World:
             self.scroll = None
             self.power_light = "white"
             self.yaw_offset = self.heading
+            if self.carried is None:
+                m = self.arm_motor()
+                self.arm_ref = m.pos if m else 0.0   # the arm starts "up" where it is
 
     def program_stop(self):
         with self.lock:
@@ -400,6 +488,7 @@ class World:
                 self.trail.append((nx, ny))
                 if len(self.trail) > 4000:
                     self.trail = self.trail[-4000:]
+        self._update_cubes()
         if self.scroll:
             self._step_scroll(now)
 
@@ -511,6 +600,8 @@ class World:
                 "ports": ports,
                 "events": ev,
                 "trail_len": len(self.trail),
+                "cubes": [{k: c[k] for k in ("x", "y", "size", "color")} | {"carried": c is self.carried} for c in self.cubes],
+                "arm_down": self.arm_down() if self.arm_port() else None,
                 "config_version": self.config_version,
                 "config": {p: dict(d) for p, d in self.config.items()},
             }

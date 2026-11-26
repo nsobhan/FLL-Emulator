@@ -1,6 +1,28 @@
 """Sample SPIKE App 3 Python programs for trying the simulator without the app."""
 
 EXAMPLES = {
+    "relay": {
+        "name": "Camp 2: Relay race", "mat": "relay",
+        "source": '''from hub import port
+import motor, motor_pair, distance_sensor, runloop
+
+async def main():
+    # Practice Driving Base: drive C (left) + D (right), arm on E, distance sensor on F
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+    for baton in range(4):
+        motor_pair.move(motor_pair.PAIR_1, 0, velocity=333)
+        while distance_sensor.distance(port.F) == -1 or distance_sensor.distance(port.F) > 80:  # mm
+            await runloop.sleep_ms(10)
+        motor_pair.stop(motor_pair.PAIR_1)
+        await motor.run_for_degrees(port.E, 90, 832)          # lower the arm
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, -450, 0, velocity=333)  # back 22 cm
+        await motor.run_for_degrees(port.E, -90, 832)         # raise the arm, let go
+        print("baton", baton + 1, "home")
+        await runloop.sleep_ms(1000)
+
+runloop.run(main())
+''',
+    },
     "camp1": {
         "name": "Camp 1: Drive a square", "mat": "camp1",
         "source": '''from hub import port

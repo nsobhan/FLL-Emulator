@@ -228,6 +228,27 @@ TEST_BLOCKS = {
 }
 
 
+class ArmAndCubes(unittest.TestCase):
+    def test_grab_carry_and_deliver(self):
+        w = World("camp2")
+        w.apply_config({"C": {"type": "motor", "model": "medium", "role": "left"},
+                        "D": {"type": "motor", "model": "medium", "role": "right"},
+                        "E": {"type": "motor", "model": "medium", "role": "arm"}, "F": {"type": "distance"}})
+        w.reset_robot()
+        w.x = 52.0                                    # stopped in front of the marker, cube under the arm
+        self.assertEqual(w.distance_mm(), 80)         # sensor sees the marker, not the low cube
+        w.motors["E"].pos += 90                       # lower the arm
+        w.step(0.01, time.monotonic())
+        self.assertIs(w.carried, w.cubes[0])
+        w.x = 30.0                                    # back home
+        w.step(0.01, time.monotonic())
+        self.assertAlmostEqual(w.cubes[0]["x"], 43.0, delta=0.5)
+        w.motors["E"].pos -= 90                       # raise the arm: let go
+        w.step(0.01, time.monotonic())
+        self.assertIsNone(w.carried)
+        self.assertTrue(any("delivered home (1 of 1)" in e.get("text", "") for e in w.events))
+
+
 class BlockProjects(unittest.TestCase):
     def test_render(self):
         from spikehub.blocks import Project

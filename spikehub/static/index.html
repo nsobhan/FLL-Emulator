@@ -446,6 +446,17 @@ function drawMat(st) {
         ctx.beginPath(); ctx.moveTo(X(x2) - L * Math.cos(a - 0.6), Y(y2) - L * Math.sin(a - 0.6));
         ctx.lineTo(X(x2), Y(y2)); ctx.lineTo(X(x2) - L * Math.cos(a + 0.6), Y(y2) - L * Math.sin(a + 0.6)); ctx.stroke();
       }
+    } else if (s.kind === "zone") {
+      ctx.fillStyle = s.color || "#fff1b8"; ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+      ctx.strokeStyle = "#d9b84a"; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+      ctx.strokeRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale); ctx.setLineDash([]);
+      if (s.label) { ctx.fillStyle = "#8a6d00"; ctx.font = `700 ${Math.max(10, 2.2 * scale)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(s.label, X(s.x) + 4, Y(s.y + s.h) + 4); }
+    } else if (s.kind === "marker") {
+      ctx.fillStyle = "#3d4248"; ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+      ctx.fillStyle = "#ffc917"; ctx.fillRect(X(s.x), Y(s.y + s.h * 0.6), s.w * scale, s.h * 0.2 * scale);
+      if (s.label) { ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(10, 2.2 * scale)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText(s.label, X(s.x + s.w / 2), Y(s.y + s.h) - 4); }
     } else if (s.kind === "label") {
       ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(11, 2.6 * scale)}px Inter, system-ui, sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.text, X(s.x), Y(s.y));
@@ -459,7 +470,11 @@ function drawMat(st) {
     ctx.strokeStyle = "rgba(255,170,0,.8)"; ctx.lineWidth = 2; ctx.beginPath();
     S.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
   }
+  const cube = c => { const h = c.size / 2; ctx.fillStyle = c.color; ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = 1;
+    ctx.fillRect(X(c.x - h), Y(c.y + h), c.size * scale, c.size * scale); ctx.strokeRect(X(c.x - h), Y(c.y + h), c.size * scale, c.size * scale); };
+  (st?.cubes || []).filter(c => !c.carried).forEach(cube);
   if (st) drawRobot(st);
+  (st?.cubes || []).filter(c => c.carried).forEach(cube);
 }
 
 function portOf(type) { return Object.entries(S.config).find(([p, d]) => d.type === type)?.[0]; }
@@ -502,6 +517,11 @@ function drawRobot(st) {
     ctx.fillStyle = "#cfd6da"; ctx.beginPath(); ctx.arc(10, -1.5, .8, 0, 7); ctx.arc(10, 1.5, .8, 0, 7); ctx.fill(); }
   const fp = portOf("force");
   if (fp && st.ports[fp]) { ctx.fillStyle = st.ports[fp].pressed ? "#1f9d6b" : "#8b9196"; roundRect(10.6, -1, 1, 2, .3); ctx.fill(); }
+  if (st.arm_down !== null && st.arm_down !== undefined) {
+    // grabber arm: a raised bar when up, two jaws reaching forward when lowered
+    ctx.fillStyle = "#6d747b"; roundRect(10, -6.2, 1.4, 12.4, .4); ctx.fill();
+    if (st.arm_down) { roundRect(10.5, -6.2, 7, 1.4, .4); ctx.fill(); roundRect(10.5, 4.8, 7, 1.4, .4); ctx.fill(); }
+  }
   ctx.restore();
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }

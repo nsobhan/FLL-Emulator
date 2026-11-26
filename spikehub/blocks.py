@@ -407,7 +407,8 @@ class BlockRunner:
         self.mods = self.rt._modules()
         self.vars = {vid: v["value"] for vid, v in p.variables.items()}
         self.lists = {lid: list(l["value"]) for lid, l in p.lists.items()}
-        self.move_pair = ("A", "B")
+        dl, dr = self.world.drive_ports()   # start with the robot's own drive motors
+        self.move_pair = (dl, dr) if dl and dr else ("A", "B")
         self.move_speed = 50
         self.motor_speed = {}
         self.rotation_cm = WHEEL_CIRCUMFERENCE_CM
@@ -416,10 +417,8 @@ class BlockRunner:
         self.hat_prev = {}
         self._fed = {}
         self.procs = self._find_procs()
-        try:
+        if all(self.world.device_at(l) == "motor" for l in self.move_pair):
             self._pair(*self.move_pair, quiet=True)
-        except Exception:
-            pass
         for h in p.hats:
             if p.blocks[h]["opcode"] == "flipperevents_whenProgramStarts":
                 self._spawn(h)

@@ -1,5 +1,5 @@
-import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js?v=2";
-import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js?v=2";
+import { World, MATS, PORTS, COLOR_BY_ID, defaultConfig, now } from "./sim.js?v=3";
+import { BlockRunner, Project, readProject, COLOR_NAMES, ProjectError } from "./blocks.js?v=3";
 
 const $ = s => document.querySelector(s);
 const COLORS = { black: "#1d1f21", red: "#e0312b", green: "#1aa64a", blue: "#1f6fe0", yellow: "#ffd21a", magenta: "#d03ca8",
@@ -144,12 +144,99 @@ async def main():
 runloop.run(main())</pre>
 </details>`;
 
+// Learning camp 2 (Competition-Ready "Training Camp 2: Playing with Objects").
+// Practice Driving Base with a Distance Sensor (F) and an Arm (motor E).
+function camp2Program(name, relay) {
+  const { p, add, menu, lit, chain, dir } = builder(name);
+  const port = (op, v) => [1, menu(op, v)];
+  const closer = cm => add("flippersensors_isDistance", { inputs: { PORT: port("flippersensors_distance-sensor-selector", "F"), VALUE: lit(cm) }, fields: { COMPARATOR: ["<", null], UNIT: ["cm", null] } });
+  const arm = (direction, deg) => add("flippermotor_motorTurnForDirection", { inputs: { PORT: port("flippermotor_multiple-port-selector", "E"), DIRECTION: [1, menu("flippermotor_custom-icon-direction", direction)], VALUE: lit(deg) }, fields: { UNIT: ["degrees", null] } });
+  const trip = [
+    add("flippermove_startMove", { inputs: { DIRECTION: dir("forward") } }),
+    add("control_wait_until", { inputs: { CONDITION: [2, closer(8)] } }),
+    add("flippermove_stopMove"),
+    arm("clockwise", 90),                                              // lower the arm over the cube
+    add("flippermove_move", { inputs: { DIRECTION: dir("back"), VALUE: lit(22) }, fields: { UNIT: ["cm", null] } }),
+    arm("counterclockwise", 90),                                       // raise the arm: let go
+  ];
+  const setup = [
+    add("flipperevents_whenProgramStarts", { top: true }),
+    add("flippermove_setMovementPair", { inputs: { PAIR: [1, menu("flippermove_movement-port-selector", "CD")] } }),
+    add("flippermove_movementSpeed", { inputs: { SPEED: lit(30) } }),
+  ];
+  if (relay) {
+    const body = chain([...trip, add("control_wait", { inputs: { DURATION: lit(1) } })]);
+    chain([...setup, add("control_repeat", { inputs: { TIMES: [1, [6, "4"]], SUBSTACK: [2, body] } })]);
+  } else chain([...setup, ...trip]);
+  return p;
+}
+
+const CAMP2_GUIDE = `
+<h3>Camp 2 · Playing with objects</h3>
+<p><b>Goal:</b> use the distance sensor to stop at an object, grab a cube with the arm, and win a relay race.</p>
+<p><b>Robot:</b> the Practice Driving Base with a <b>Distance Sensor on F</b> and an <b>Arm on motor E</b>, driving with C (left) and D (right).
+In the simulator, turning the arm motor 45° or more lowers it, and it grabs a cube just in front of the robot.
+Turning it back raises it and lets go.</p>
+<h4>Steps</h4>
+<ol>
+  <li><b>Stop at the marker by guessing.</b> The marker is 30 cm in front of the sensor. Try <i>move ↑ forward for 22 cm</i>.
+    Too far or not far enough? Change the number.</li>
+  <li><b>Stop at the marker with the sensor.</b> <i>start moving ↑ forward</i>, <i>wait until F is closer than 8 cm</i>, <i>stop moving</i>.
+    Move the marker or the robot and try both programs again. Which one always works?</li>
+  <li><b>Grab the cube.</b> After stopping, <i>E run ↻ clockwise for 90 degrees</i> lowers the arm onto the cube.
+    Then <i>move ↓ back for 22 cm</i> to bring it home, and <i>E run ↺ counterclockwise for 90 degrees</i> to let go.
+    This is the <b>Camp 2: Stop and grab</b> example.</li>
+  <li><b>Relay race.</b> Four batons wait at the marker. Put the trip inside <i>repeat 4</i> and add <i>wait 1 seconds</i>
+    so a teammate can take each baton. This is the <b>Camp 2: Relay race</b> example. The feed counts each baton that reaches HOME.</li>
+</ol>
+<h4>Why these numbers?</h4>
+<ul>
+  <li>The distance sensor sits about 10 cm in front of the middle of the robot. Stopping when it reads 8 cm leaves the cube right under the arm.</li>
+  <li>The sensor sees the tall marker but not the low cube. On a real robot, keep the raised arm high enough to pass over the cube
+    without blocking the sensor.</li>
+  <li>Backing up 22 cm returns the robot to where it started, inside HOME.</li>
+</ul>
+<h4>Try this</h4>
+<ul>
+  <li>Stop at 5 cm or at 12 cm. Can the arm still reach the cube?</li>
+  <li>Make the relay faster: speed up the driving, and remove the wait.</li>
+  <li>Bring the cube back using the distance sensor too: drive back until F is farther than 30 cm.</li>
+  <li>Write your own game rules with a different object and challenge another team.</li>
+</ul>
+<details><summary>The relay race in Python</summary>
+<pre>from hub import port
+import motor, motor_pair, distance_sensor, runloop
+
+async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.C, port.D)
+    for baton in range(4):
+        motor_pair.move(motor_pair.PAIR_1, 0, velocity=333)
+        while distance_sensor.distance(port.F) == -1 or distance_sensor.distance(port.F) > 80:   # mm
+            await runloop.sleep_ms(10)
+        motor_pair.stop(motor_pair.PAIR_1)
+        await motor.run_for_degrees(port.E, 90, 832)          # lower the arm
+        await motor_pair.move_for_degrees(motor_pair.PAIR_1, -450, 0, velocity=333)   # back 22 cm
+        await motor.run_for_degrees(port.E, -90, 832)         # raise the arm, let go
+        await runloop.sleep_ms(1000)
+
+runloop.run(main())</pre>
+</details>`;
+
+const CAMP2_ROBOT = {
+  A: {}, B: {}, C: { type: "motor", model: "medium", role: "left" }, D: { type: "motor", model: "medium", role: "right" },
+  E: { type: "motor", model: "medium", role: "arm" }, F: { type: "distance" },
+};
+
 const CAMP_ROBOT = {
   A: {}, B: {}, C: { type: "motor", model: "medium", role: "left" }, D: { type: "motor", model: "medium", role: "right" },
   E: {}, F: {},
 };
 
 const EXAMPLES = {
+  camp2: { mat: "camp2", make: () => camp2Program("Camp 2: Stop and grab", false), config: CAMP2_ROBOT, guide: CAMP2_GUIDE,
+    hint: "Learning camp 2: stop at the marker with the distance sensor, grab the cube with the arm, and bring it HOME." },
+  relay: { mat: "relay", make: () => camp2Program("Camp 2: Relay race", true), config: CAMP2_ROBOT, guide: CAMP2_GUIDE,
+    hint: "Learning camp 2 relay race: bring all four batons HOME, one trip at a time." },
   camp1: { mat: "camp1", make: camp1Example, config: CAMP_ROBOT, guide: CAMP1_GUIDE,
     hint: "Learning camp 1: make the Driving Base move in a square. Press Run project, then read the camp guide below the program." },
   colors: { mat: "colors", make: colorExample,
@@ -208,6 +295,7 @@ $("#exampleSel").onchange = e => { if (e.target.value) loadExample(e.target.valu
 $("#runBtn").onclick = () => {
   if (!project || project.type === "python") return;
   $("#feed").textContent = ""; world.trail = [[world.x, world.y]];
+  if (world.mat.cubes) world.resetRobot();   // challenges with objects always start from the beginning
   runner.start(project);
 };
 $("#stopBtn").onclick = () => runner.stop();
@@ -297,6 +385,18 @@ function draw() {
       ctx.beginPath(); s.points.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
     } else if (s.kind === "wall") { ctx.fillStyle = css("--wall"); ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale); }
     else if (s.kind === "guide") drawGuide(s);
+    else if (s.kind === "zone") {
+      ctx.fillStyle = s.color || "#fff1b8"; ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+      ctx.strokeStyle = "#d9b84a"; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+      ctx.strokeRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale); ctx.setLineDash([]);
+      if (s.label) { ctx.fillStyle = "#8a6d00"; ctx.font = `700 ${Math.max(10, 2.2 * scale)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(s.label, X(s.x) + 4, Y(s.y + s.h) + 4); }
+    } else if (s.kind === "marker") {
+      ctx.fillStyle = "#3d4248"; ctx.fillRect(X(s.x), Y(s.y + s.h), s.w * scale, s.h * scale);
+      ctx.fillStyle = "#ffc917"; ctx.fillRect(X(s.x), Y(s.y + s.h * 0.6), s.w * scale, s.h * 0.2 * scale);
+      if (s.label) { ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(10, 2.2 * scale)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText(s.label, X(s.x + s.w / 2), Y(s.y + s.h) - 4); }
+    }
     else if (s.kind === "label") {
       ctx.fillStyle = "#5f6870"; ctx.font = `600 ${Math.max(11, 2.6 * scale)}px Inter, system-ui, sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.text, X(s.x), Y(s.y));
@@ -308,7 +408,15 @@ function draw() {
     ctx.strokeStyle = "rgba(255,170,0,.85)"; ctx.lineWidth = 2; ctx.beginPath();
     world.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke();
   }
+  for (const c of world.cubes) if (c !== world.carried) drawCube(c);
   drawRobot();
+  if (world.carried) drawCube(world.carried);
+}
+function drawCube(c) {
+  const h = c.size / 2;
+  ctx.fillStyle = c.color; ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = 1;
+  ctx.fillRect(X(c.x - h), Y(c.y + h), c.size * scale, c.size * scale);
+  ctx.strokeRect(X(c.x - h), Y(c.y + h), c.size * scale, c.size * scale);
 }
 // A path for the robot to follow (drawn only; sensors don't see it), with an arrowhead at the end.
 function drawGuide(s) {
@@ -350,6 +458,12 @@ function drawRobot() {
   }
   if (portOf("distance")) { ctx.fillStyle = "#2b2f33"; rr(9.2, -3, 1.6, 6, .6); ctx.fill(); }
   if (portOf("force")) { ctx.fillStyle = world.forceValue()[1] ? "#1f9d6b" : "#8b9196"; rr(10.6, -1, 1, 2, .3); ctx.fill(); }
+  if (world.armPort()) {
+    // grabber arm: a raised bar when up, two open jaws reaching forward when lowered
+    ctx.fillStyle = "#6d747b";
+    if (world.armDown()) { rr(10.5, -6.2, 7, 1.4, .4); ctx.fill(); rr(10.5, 4.8, 7, 1.4, .4); ctx.fill(); rr(10, -6.2, 1.4, 12.4, .4); ctx.fill(); }
+    else { rr(10, -6.2, 1.4, 12.4, .4); ctx.fill(); }
+  }
   ctx.restore();
 }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
